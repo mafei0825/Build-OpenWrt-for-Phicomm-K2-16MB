@@ -1,0 +1,153 @@
+name: Build K2 OpenWrt 24.10.5 Chinese UI
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'OpenWrt version'
+        required: true
+        default: '24.10.5'
+        type: choice
+        options:
+          - '24.10.5'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+          gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+          python3-setuptools rsync swig unzip zlib1g-dev file wget subversion \
+          libelf-dev autoconf automake libtool curl
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download OpenWrt 24.10.5 source
+        run: |
+          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git
+          cd openwrt
+          git fetch --tags
+          git checkout v24.10.5
+          echo "✅ OpenWrt 24.10.5 source downloaded"
+
+      - name: Modify DTS for 16MB flash
+        run: |
+          cd openwrt
+          
+          # Find DTS file
+          DTS_FILE=$(find target/linux/ramips/dts -name "*k2*" -o -name "*phicomm*" | head -1)
+          
+          if [ -f "$DTS_FILE" ]; then
+            echo "Found DTS file: $DTS_FILE"
+            sed -i 's/reg = <0x50000 0xfb0000>/reg = <0x50000 0x1fb0000>/' "$DTS_FILE"
+            echo "✅ Modified for 16MB flash"
+            grep -A3 "firmware" "$DTS_FILE" | head -5
+          else
+            echo "❌ DTS file not found"
+            exit 1
+          fi
+
+      - name: Verify 16MB modification
+        run: |
+          cd openwrt
+          DTS_FILE=$(find target/linux/ramips/dts -name "*k2*" -o -name "*phicomm*" | head -1)
+          
+          if [ -f "$DTS_FILE" ] && grep -q "0x1fb0000" "$DTS_FILE"; then
+            echo "✅ 16MB modification confirmed"
+          else
+            echo "❌ 16MB modification failed"
+            exit 1
+          fi
+
+      - name: Modify Makefile
+        run: |
+          cd openwrt
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          
+          if [ -f "$MK_FILE" ]; then
+            sed -i '/define Device\/phicomm_k2/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+            echo "✅ IMAGE_SIZE modified"
+          fi
+
+      - name: Create config file
+        run: |
+          cd openwrt
+          
+          # Create .config line by line
+          echo "CONFIG_TARGET_ramips=y" > .config
+          echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
+          echo "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
+          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
+          echo "CONFIG_PACKAGE_luci-theme-material=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-material-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_zerotier=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76-core=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76x0e=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76x2=y" >> .config
+          echo "CONFIG_MT76_LEDS=y" >> .config
+          echo "CONFIG_PACKAGE_iperf3=y" >> .config
+          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
+          echo "CONFIG_PACKAGE_iptables=y" >> .config
+          echo "CONFIG_PACKAGE_iptables-mod-conntrack-extra=y" >> .config
+          echo "CONFIG_PACKAGE_iptables-mod-extra=y" >> .config
+          echo "CONFIG_PACKAGE_iptables-mod-nat-extra=y" >> .config
+          echo "CONFIG_PACKAGE_htop=y" >> .config
+          echo "CONFIG_PACKAGE_nano=y" >> .config
+          echo "CONFIG_PACKAGE_curl=y" >> .config
+          echo "CONFIG_PACKAGE_wget=y" >> .config
+          echo "CONFIG_PACKAGE_tar=y" >> .config
+          echo "CONFIG_PACKAGE_unzip=y" >> .config
+          echo "CONFIG_PACKAGE_coreutils=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-ipt-nat6=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-ipt-raw=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-nathelper-extra=y" >> .config
+          
+          make defconfig
+          echo "✅ .config created"
+
+      - name: Update feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Download packages
+        run: |
+          cd openwrt
+          make download -j8
+
+      - name: Compile firmware
+        run: |
+          cd openwrt
+          make tools/compile -j$(nproc)
+          make toolchain/compile -j$(nproc)
+          make -j$(nproc) V=s || make -j1 V=s
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: K2-24.10.5-ChineseUI
+          path: openwrt/bin/targets/**/*.bin
+          retention-days: 30
