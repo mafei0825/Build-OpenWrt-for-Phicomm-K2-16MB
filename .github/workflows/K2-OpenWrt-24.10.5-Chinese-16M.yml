@@ -46,19 +46,28 @@ jobs:
           echo "========================================="
           echo "🔍 查找包含 'partition@50000' 定义的文件"
           echo "========================================="
-          grep -l "partition@50000" $(find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi") 2>/dev/null || echo "未找到分区定义"
+          # 使用临时文件避免管道语法问题
+          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" > /tmp/dts_files.txt
+          while read file; do
+            if grep -q "partition@50000" "$file" 2>/dev/null; then
+              echo "$file"
+            fi
+          done < /tmp/dts_files.txt
           
           echo ""
           echo "========================================="
           echo "🔍 显示找到的分区配置"
           echo "========================================="
-          for file in $(grep -l "partition@50000" $(find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi") 2>/dev/null | head -3); do
-            if [ -f "$file" ]; then
+          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" > /tmp/dts_files2.txt
+          count=0
+          while read file && [ $count -lt 3 ]; do
+            if grep -q "partition@50000" "$file" 2>/dev/null; then
               echo "文件: $file"
               grep -A5 "partition@50000" "$file" | head -10
               echo "---"
+              count=$((count + 1))
             fi
-          done
+          done < /tmp/dts_files2.txt
 
       - name: Auto-modify DTS for 16MB flash
         run: |
@@ -67,25 +76,28 @@ jobs:
           echo "🔧 自动修改DTS文件支持16MB闪存"
           echo "========================================="
           
-          TARGET_FILES=$(grep -l "partition@50000" $(find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi") 2>/dev/null | grep -i "k2\|phicomm" || echo "")
+          # 查找包含分区定义且包含k2/phicomm的文件
+          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" > /tmp/dts_files3.txt
+          modified=0
+          while read file; do
+            if echo "$file" | grep -q -i "k2\|phicomm" && grep -q "partition@50000" "$file" 2>/dev/null; then
+              echo "修改文件: $file"
+              cp "$file" "${file}.bak"
+              
+              echo "修改前:"
+              grep -A5 "partition@50000" "$file" | head -5
+              
+              sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$file"
+              sed -i 's/reg = <0x50000 0xfb0000>/reg = <0x50000 0x1fb0000>/' "$file"
+              
+              echo "修改后:"
+              grep -A5 "partition@50000" "$file" | head -5
+              echo "---"
+              modified=1
+            fi
+          done < /tmp/dts_files3.txt
           
-          if [ -n "$TARGET_FILES" ]; then
-            for file in $TARGET_FILES; do
-              if [ -f "$file" ]; then
-                echo "修改文件: $file"
-                cp "$file" "${file}.bak"
-                
-                echo "修改前:"
-                grep -A5 "partition@50000" "$file" | head -5
-                
-                sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$file"
-                sed -i 's/reg = <0x50000 0xfb0000>/reg = <0x50000 0x1fb0000>/' "$file"
-                
-                echo "修改后:"
-                grep -A5 "partition@50000" "$file" | head -5
-                echo "---"
-              fi
-            done
+          if [ $modified -eq 1 ]; then
             echo "✅ 16MB闪存修改完成"
           else
             echo "⚠️ 未找到K2相关的分区定义文件，将继续编译"
@@ -107,7 +119,7 @@ jobs:
         run: |
           cd openwrt
           
-          # 使用逐行echo替代多行字符串
+          # 使用逐行echo
           echo "CONFIG_TARGET_ramips=y" > .config
           echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
           echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
