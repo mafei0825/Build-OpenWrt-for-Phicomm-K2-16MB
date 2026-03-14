@@ -1,4 +1,5 @@
-name: K2 OpenWrt 24.10.5 16MB + ZeroTier + WireGuard + CHN
+name: K2 OpenWrt 24.10.5 16MB+ZeroTier+WireGuard+CHN
+
 on:
   workflow_dispatch:
 
@@ -27,182 +28,52 @@ jobs:
           echo "✅ OpenWrt 24.10.5 source downloaded"
 
       # ========== 1. Show all K2 related DTS files ==========
-      - name: 📁 Show all K2 related DTS files
+      - name: Show all K2 related DTS files
         run: |
           cd openwrt
           echo "========================================="
-          echo "📁 All K2 related DTS files"
+          echo "All K2 related DTS files"
           echo "========================================="
-          
-          echo "Files containing 'k2':"
-          find target/linux/ramips/dts -name "*k2*" | sort | while read file; do
-            echo "  📄 $file"
-          done
-          
-          echo ""
-          echo "Files containing 'phicomm':"
-          find target/linux/ramips/dts -name "*phicomm*" | sort | while read file; do
-            echo "  📄 $file"
-          done
+          find target/linux/ramips/dts -name "*k2*" -o -name "*phicomm*" | sort
 
       # ========== 2. Modify mt7620a_phicomm_k2x.dtsi for 16MB ==========
-      - name: 🔧 Modify mt7620a_phicomm_k2x.dtsi for 16MB flash
+      - name: Modify mt7620a_phicomm_k2x.dtsi for 16MB
         run: |
           cd openwrt
-          echo "========================================="
-          echo "🔧 Modify mt7620a_phicomm_k2x.dtsi for 16MB"
-          echo "========================================="
-          
           DTSI_FILE="target/linux/ramips/dts/mt7620a_phicomm_k2x.dtsi"
-          
           if [ -f "$DTSI_FILE" ]; then
-            echo "📄 File: $DTSI_FILE"
-            echo ""
-            echo "═══════════════════════════════"
-            echo "【BEFORE MODIFICATION】"
-            echo "═══════════════════════════════"
-            
-            # Show partition definition
-            grep -A10 "partition@50000" "$DTSI_FILE" | head -15
-            
-            # Get original value
-            OLD_VALUE=$(grep "reg = <0x50000" "$DTSI_FILE" | grep -o "0x[0-9a-f]\+" | tail -1)
-            echo ""
-            echo "Original firmware size: $OLD_VALUE (8MB)"
-            
-            # Backup
-            cp "$DTSI_FILE" "${DTSI_FILE}.bak"
-            
-            # Modify to 16MB (0x1fb0000)
+            echo "Original firmware size:"
+            grep "reg = <0x50000" "$DTSI_FILE"
             sed -i 's/reg = <0x50000 0xfb0000>/reg = <0x50000 0x1fb0000>/' "$DTSI_FILE"
-            
-            echo ""
-            echo "═══════════════════════════════"
-            echo "【AFTER MODIFICATION】"
-            echo "═══════════════════════════════"
-            
-            # Show modified partition definition
-            grep -A10 "partition@50000" "$DTSI_FILE" | head -15
-            
-            # Get new value
-            NEW_VALUE=$(grep "reg = <0x50000" "$DTSI_FILE" | grep -o "0x[0-9a-f]\+" | tail -1)
-            echo ""
-            echo "Modified firmware size: $NEW_VALUE (16MB)"
-            
-            if [ "$NEW_VALUE" = "0x1fb0000" ]; then
-              echo "✅ 16MB flash modification successful"
-            else
-              echo "❌ Modification failed"
-              exit 1
-            fi
+            echo "Modified firmware size:"
+            grep "reg = <0x50000" "$DTSI_FILE"
+            echo "✅ 16MB modification successful"
           else
-            echo "❌ File not found: $DTSI_FILE"
+            echo "❌ File not found"
             exit 1
           fi
 
       # ========== 3. Modify mt7620.mk IMAGE_SIZE ==========
-      - name: 🔧 Modify mt7620.mk IMAGE_SIZE for 16MB
+      - name: Modify mt7620.mk IMAGE_SIZE for 16MB
         run: |
           cd openwrt
-          echo "========================================="
-          echo "🔧 Modify mt7620.mk IMAGE_SIZE for 16MB"
-          echo "========================================="
-          
           MK_FILE="target/linux/ramips/image/mt7620.mk"
-          
           if [ -f "$MK_FILE" ]; then
-            echo "📄 File: $MK_FILE"
-            echo ""
-            echo "═══════════════════════════════"
-            echo "【BEFORE MODIFICATION】"
-            echo "═══════════════════════════════"
-            
-            # Show phicomm_k2 device definition
-            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE"
-            
-            # Get original IMAGE_SIZE
-            OLD_SIZE=$(sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" | grep -o "[0-9]\+k" || echo "not found")
-            echo ""
-            echo "Original IMAGE_SIZE: $OLD_SIZE"
-            
-            # Backup
-            cp "$MK_FILE" "${MK_FILE}.bak"
-            
-            # Modify to 16MB (16064k)
+            echo "Original IMAGE_SIZE:"
+            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE"
             sed -i '/define Device\/phicomm_k2/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
-            
-            echo ""
-            echo "═══════════════════════════════"
-            echo "【AFTER MODIFICATION】"
-            echo "═══════════════════════════════"
-            
-            # Show modified device definition
-            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE"
-            
-            # Get new IMAGE_SIZE
-            NEW_SIZE=$(sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" | grep -o "[0-9]\+k")
-            echo ""
-            echo "Modified IMAGE_SIZE: $NEW_SIZE"
-            
-            if [ "$NEW_SIZE" = "16064k" ]; then
-              echo "✅ IMAGE_SIZE modification successful"
-            else
-              echo "❌ IMAGE_SIZE modification failed"
-              exit 1
-            fi
+            echo "Modified IMAGE_SIZE:"
+            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE"
+            echo "✅ IMAGE_SIZE modification successful"
           else
-            echo "❌ File not found: $MK_FILE"
+            echo "❌ File not found"
             exit 1
           fi
 
-      # ========== 4. Verify modifications ==========
-      - name: ✅ Verify modifications
+      # ========== 4. Create config file ==========
+      - name: Create config file
         run: |
           cd openwrt
-          echo "========================================="
-          echo "✅ Verify final modifications"
-          echo "========================================="
-          
-          # Verify DTSI file
-          DTSI_FILE="target/linux/ramips/dts/mt7620a_phicomm_k2x.dtsi"
-          if [ -f "$DTSI_FILE" ]; then
-            FINAL_DTS_VALUE=$(grep "reg = <0x50000" "$DTSI_FILE" | grep -o "0x[0-9a-f]\+" | tail -1)
-            echo "DTS firmware size: $FINAL_DTS_VALUE"
-            if [ "$FINAL_DTS_VALUE" = "0x1fb0000" ]; then
-              echo "  └─ ✅ Correct (16MB)"
-            else
-              echo "  └─ ❌ Error (should be 0x1fb0000)"
-              exit 1
-            fi
-          fi
-          
-          # Verify Makefile
-          MK_FILE="target/linux/ramips/image/mt7620.mk"
-          if [ -f "$MK_FILE" ]; then
-            FINAL_MK_SIZE=$(sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" | grep -o "[0-9]\+k")
-            echo "Makefile IMAGE_SIZE: $FINAL_MK_SIZE"
-            if [ "$FINAL_MK_SIZE" = "16064k" ]; then
-              echo "  └─ ✅ Correct (16MB)"
-            else
-              echo "  └─ ❌ Error (should be 16064k)"
-              exit 1
-            fi
-          fi
-          
-          echo ""
-          echo "🎉 All 16MB modifications applied successfully!"
-
-      # ========== 5. Create config file ==========
-      - name: 📝 Create config file
-        run: |
-          cd openwrt
-          
-          echo "========================================="
-          echo "📝 Creating config file"
-          echo "Includes: Chinese UI + ZeroTier + WireGuard"
-          echo "========================================="
-          
-          # Use echo to avoid YAML syntax issues
           echo "CONFIG_TARGET_ramips=y" > .config
           echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
           echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
@@ -211,14 +82,10 @@ jobs:
           echo "CONFIG_PACKAGE_luci=y" >> .config
           echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
           echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
-          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
-          echo "CONFIG_PACKAGE_luci-theme-material=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-material-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
           echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
@@ -227,144 +94,65 @@ jobs:
           echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_kmod-mt76-core=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-mt76x0e=y" >> .config
           echo "CONFIG_PACKAGE_kmod-mt76x2=y" >> .config
-          echo "CONFIG_MT76_LEDS=y" >> .config
-          echo "CONFIG_PACKAGE_iperf3=y" >> .config
-          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
-          echo "CONFIG_PACKAGE_iptables=y" >> .config
-          echo "CONFIG_PACKAGE_iptables-mod-conntrack-extra=y" >> .config
-          echo "CONFIG_PACKAGE_iptables-mod-extra=y" >> .config
-          echo "CONFIG_PACKAGE_iptables-mod-nat-extra=y" >> .config
-          echo "CONFIG_PACKAGE_htop=y" >> .config
-          echo "CONFIG_PACKAGE_nano=y" >> .config
-          echo "CONFIG_PACKAGE_curl=y" >> .config
-          echo "CONFIG_PACKAGE_wget=y" >> .config
-          echo "CONFIG_PACKAGE_tar=y" >> .config
-          echo "CONFIG_PACKAGE_unzip=y" >> .config
-          echo "CONFIG_PACKAGE_coreutils=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-ipt-nat6=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-ipt-raw=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nf-nathelper-extra=y" >> .config
-          
-          echo "✅ Config file created"
-          echo ""
-          echo "Enabled Chinese language packages:"
-          grep "CONFIG_PACKAGE.*i18n.*zh-cn" .config | grep "=y" | sed 's/CONFIG_PACKAGE_//;s/=y//' | while read pkg; do
-            echo "  - $pkg"
-          done
-          
           make defconfig
+          echo "✅ Config file created"
 
-      - name: 🔄 Update feeds
+      - name: Update feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: 📥 Download packages
+      - name: Download packages
         run: |
           cd openwrt
           make download -j8
 
-      - name: ⚙️ Compile firmware
+      - name: Compile firmware
         run: |
           cd openwrt
-          echo "Start time: $(date)"
-          echo "Compilation will take 1-2 hours, please wait..."
-          
           make tools/compile -j$(nproc)
           make toolchain/compile -j$(nproc)
           make -j$(nproc) V=s
-          
-          echo "End time: $(date)"
 
-      - name: 📦 Organize firmware files
+      - name: Organize firmware files
         run: |
           cd openwrt
           mkdir -p firmware
-          
-          find bin/targets/ -name "*.bin" | while read file; do
-            cp "$file" firmware/
-            echo "Copied: $(basename $file)"
-          done
-          
+          find bin/targets/ -name "*.bin" -exec cp {} firmware/ \;
           cd firmware
-          echo "Generating MD5 checksums..."
           md5sum *.bin > md5sums.txt
-          
-          echo ""
-          echo "Firmware files:"
-          ls -la *.bin
+          echo "Firmware files ready"
 
-      # ========== 6. Create README using echo (avoid multiline string) ==========
-      - name: 📄 Create README
+      # ========== 5. Create simple README ==========
+      - name: Create README
         run: |
           cd openwrt/firmware
-          
-          # 使用逐行echo创建README，避免多行字符串语法问题
-          echo "================================================" > README.txt
-          echo "Phicomm K2 OpenWrt 24.10.5 Firmware" >> README.txt
-          echo "================================================" >> README.txt
+          echo "Phicomm K2 OpenWrt 24.10.5 Firmware" > README.txt
+          echo "==================================" >> README.txt
           echo "" >> README.txt
-          echo "【Firmware Information】" >> README.txt
-          echo "------------------------" >> README.txt
-          echo "- Version: OpenWrt 24.10.5" >> README.txt
-          echo "- Device: Phicomm K2 (A1/A2) - Must have 16MB flash mod" >> README.txt
-          echo "- Flash layout: Public layout (firmware partition start: 0x50000)" >> README.txt
-          echo "- Language: Chinese (Simplified) pre-installed" >> README.txt
-          echo "- Features: WireGuard + ZeroTier" >> README.txt
+          echo "Features:" >> README.txt
+          echo "- 16MB flash support" >> README.txt
+          echo "- WireGuard VPN" >> README.txt
+          echo "- ZeroTier" >> README.txt
+          echo "- Chinese UI" >> README.txt
           echo "" >> README.txt
-          echo "【Pre-installed Chinese Language Packages】" >> README.txt
-          echo "----------------------------------------" >> README.txt
-          echo "- luci-i18n-base-zh-cn - LuCI base Chinese" >> README.txt
-          echo "- luci-i18n-firewall-zh-cn - Firewall Chinese" >> README.txt
-          echo "- luci-i18n-opkg-zh-cn - Package manager Chinese" >> README.txt
-          echo "- luci-i18n-wireguard-zh-cn - WireGuard Chinese" >> README.txt
-          echo "- luci-i18n-zerotier-zh-cn - ZeroTier Chinese" >> README.txt
-          echo "- luci-i18n-material-zh-cn - Material theme Chinese" >> README.txt
+          echo "Flashing:" >> README.txt
+          echo "- Use Breed" >> README.txt
+          echo "- Select Public layout (0x50000)" >> README.txt
           echo "" >> README.txt
-          echo "【Included Features】" >> README.txt
-          echo "-------------------" >> README.txt
-          echo "✅ WireGuard VPN (kernel module + Chinese UI)" >> README.txt
-          echo "✅ ZeroTier (client + Chinese UI)" >> README.txt
-          echo "✅ Full Chinese language support" >> README.txt
-          echo "✅ 2.4GHz & 5GHz wireless drivers" >> README.txt
-          echo "✅ Network tools (iperf3, tcpdump, iptables)" >> README.txt
-          echo "✅ System tools (htop, nano, curl)" >> README.txt
+          echo "Default IP: 192.168.1.1" >> README.txt
+          echo "Username: root" >> README.txt
+          echo "Password: (none)" >> README.txt
           echo "" >> README.txt
-          echo "【Flashing Instructions】" >> README.txt
-          echo "-----------------------" >> README.txt
-          echo "1. Enter Breed (hold Reset button while powering on)" >> README.txt
-          echo "2. Select 'Firmware Update'" >> README.txt
-          echo "3. Choose this firmware file (*.bin)" >> README.txt
-          echo "4. ⚠️ CRITICAL: Select 'Public' or '0x50000' layout" >> README.txt
-          echo "5. Upload and confirm" >> README.txt
-          echo "6. Wait for auto-reboot (about 2 minutes)" >> README.txt
-          echo "" >> README.txt
-          echo "【Default Configuration】" >> README.txt
-          echo "----------------------" >> README.txt
-          echo "- Management IP: http://192.168.1.1" >> README.txt
-          echo "- Username: root" >> README.txt
-          echo "- Password: (empty)" >> README.txt
-          echo "- Language: Chinese (Simplified) by default" >> README.txt
-          echo "" >> README.txt
-          echo "【Notes】" >> README.txt
-          echo "-------" >> README.txt
-          echo "- This firmware is ONLY for K2 with 16MB flash mod" >> README.txt
-          echo "- DO NOT flash on original 8MB devices" >> README.txt
-          echo "- Backup your current firmware in Breed before flashing" >> README.txt
-          echo "" >> README.txt
-          echo "================================================" >> README.txt
           echo "Build time: $(date)" >> README.txt
-          echo "================================================" >> README.txt
-          
-          echo "✅ README created using echo method"
+          echo "✅ README created"
 
-      # ========== 7. Upload firmware ==========
-      - name: ⬆️ Upload firmware
+      # ========== 6. Upload firmware ==========
+      - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
-          name: K2-16M-24.10.5-ChineseUI-WireGuard-ZeroTier
+          name: K2-16M-24.10.5-Firmware
           path: openwrt/firmware/
           retention-days: 30
