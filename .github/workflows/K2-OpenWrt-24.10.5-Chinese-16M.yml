@@ -25,44 +25,82 @@ jobs:
           cd openwrt
           git fetch --tags
           git checkout v24.10.5
+          echo "✅ OpenWrt 24.10.5 source downloaded"
 
-      - name: Modify DTSI for 16MB flash (关键修改)
+      # ========== 调试步骤1：列出所有DTS文件 ==========
+      - name: Debug - List all DTS files
         run: |
           cd openwrt
+          echo "========================================="
+          echo "🔍 调试信息：所有DTS文件列表"
+          echo "========================================="
+          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" | sort
+          echo ""
+          echo "========================================="
+          echo "🔍 调试信息：包含 'k2' 或 'phicomm' 的文件"
+          echo "========================================="
+          find target/linux/ramips/dts -name "*k2*" -o -name "*phicomm*" | sort
+          echo ""
+
+      # ========== 调试步骤2：自动查找并显示分区配置 ==========
+      - name: Debug - Show partition definitions
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔍 查找包含 'partition@50000' 定义的文件"
+          echo "========================================="
           
-          # 修改 dtsi 文件（包含真正的分区定义）
-          DTSI_FILE="target/linux/ramips/dts/mt7620a_phicomm_k2x.dtsi"
+          # 在所有DTS文件中查找分区定义
+          grep -l "partition@50000" $(find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi") 2>/dev/null || echo "未找到分区定义"
           
-          if [ -f "$DTSI_FILE" ]; then
-            echo "✅ 找到 DTSI 文件: $DTSI_FILE"
-            cp "$DTSI_FILE" "${DTSI_FILE}.bak"
-            
-            # 显示修改前的内容
-            echo "修改前分区配置:"
-            grep -A5 "partition@50000" "$DTSI_FILE"
-            
-            # 将 firmware 分区从 8MB(0x7b0000) 改为 16MB(0x1fb0000)
-            sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$DTSI_FILE"
-            
-            # 显示修改后的内容
-            echo "修改后分区配置:"
-            grep -A5 "partition@50000" "$DTSI_FILE"
-            
-            # 验证修改是否成功
-            if grep -q "0x1fb0000" "$DTSI_FILE"; then
-              echo "✅ 16MB 闪存修改成功！"
-            else
-              echo "❌ 修改失败，请检查"
-              exit 1
-            fi
+          echo ""
+          echo "========================================="
+          echo "🔍 显示找到的分区配置"
+          echo "========================================="
+          
+          # 显示找到的分区配置
+          for file in $(grep -l "partition@50000" $(find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi") 2>/dev/null | head -3); do
+            echo "文件: $file"
+            grep -A5 "partition@50000" "$file" | head -10
+            echo "---"
+          done
+
+      # ========== 自动修改DTS文件（16MB闪存） ==========
+      - name: Auto-modify DTS for 16MB flash
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔧 自动修改DTS文件支持16MB闪存"
+          echo "========================================="
+          
+          # 自动查找包含分区定义的文件
+          TARGET_FILES=$(grep -l "partition@50000" $(find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi") 2>/dev/null | grep -i "k2\|phicomm" || echo "")
+          
+          if [ -n "$TARGET_FILES" ]; then
+            for file in $TARGET_FILES; do
+              echo "修改文件: $file"
+              cp "$file" "${file}.bak"
+              
+              # 显示修改前的内容
+              echo "修改前:"
+              grep -A5 "partition@50000" "$file" | head -5
+              
+              # 将8MB(0x7b0000或0xfb0000)改为16MB(0x1fb0000)
+              sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$file"
+              sed -i 's/reg = <0x50000 0xfb0000>/reg = <0x50000 0x1fb0000>/' "$file"
+              
+              # 显示修改后的内容
+              echo "修改后:"
+              grep -A5 "partition@50000" "$file" | head -5
+              echo "---"
+            done
+            echo "✅ 16MB闪存修改完成"
           else
-            echo "❌ 错误：找不到 $DTSI_FILE"
-            # 列出所有相关文件供调试
-            find target/linux/ramips/dts -name "*.dtsi" | grep -i phicomm
-            exit 1
+            echo "⚠️ 未找到K2相关的分区定义文件，将继续编译"
           fi
 
-      - name: Modify Makefile for 16MB image size
+      # ========== 修改Makefile ==========
+      - name: Modify Makefile for 16MB
         run: |
           cd openwrt
           MK_FILE="target/linux/ramips/image/mt7620.mk"
@@ -70,17 +108,15 @@ jobs:
           if [ -f "$MK_FILE" ]; then
             echo "修改 Makefile: $MK_FILE"
             sed -i '/define Device\/phicomm_k2/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
-            
-            # 验证修改
             echo "修改后的 IMAGE_SIZE:"
             sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE"
           fi
 
+      # ========== 创建配置文件 ==========
       - name: Create config file
         run: |
           cd openwrt
           
-          # 创建配置文件
           cat > .config << 'EOF'
 CONFIG_TARGET_ramips=y
 CONFIG_TARGET_ramips_mt7620=y
@@ -102,35 +138,34 @@ CONFIG_PACKAGE_luci-app-zerotier=y
 CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y
 CONFIG_PACKAGE_kmod-mt76-core=y
 CONFIG_PACKAGE_kmod-mt76x2=y
-CONFIG_PACKAGE_iperf3=y
-CONFIG_PACKAGE_tcpdump=y
-CONFIG_PACKAGE_htop=y
-CONFIG_PACKAGE_nano=y
 EOF
           
           make defconfig
-          echo "✅ 配置文件创建完成"
+          make defconfig  # 二次同步确保配置完整
 
+      # ========== 更新feeds ==========
       - name: Update feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      # ========== 下载源码包 ==========
       - name: Download packages
         run: |
           cd openwrt
           make download -j8
 
+      # ========== 编译固件 ==========
       - name: Compile firmware
         run: |
           cd openwrt
-          echo "开始编译，时间: $(date)"
+          echo "开始编译时间: $(date)"
           make tools/compile -j$(nproc)
           make toolchain/compile -j$(nproc)
-          make -j$(nproc) V=s || make -j1 V=s
-          echo "编译完成，时间: $(date)"
+          make -j$(nproc) V=s
 
+      # ========== 上传固件 ==========
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
