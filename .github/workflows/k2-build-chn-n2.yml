@@ -1,0 +1,371 @@
+name: 编译K2 OpenWrt 24.10.5 16M闪存 + ZeroTier + WireGuard + 中文版
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: 安装编译依赖
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+          gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+          python3-setuptools rsync swig unzip zlib1g-dev file wget
+
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 下载 OpenWrt 24.10.5 源码
+        run: |
+          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git
+          cd openwrt
+          git fetch --tags
+          git checkout v24.10.5
+          echo "✅ OpenWrt 24.10.5 源码下载完成"
+
+      # ========== 1. 显示所有K2相关DTS文件 ==========
+      - name: 📁 显示所有K2相关DTS文件
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📁 所有K2相关DTS文件列表"
+          echo "========================================="
+          
+          echo "查找包含 'k2' 的文件:"
+          find target/linux/ramips/dts -name "*k2*" | sort | while read file; do
+            echo "  📄 $file"
+          done
+          
+          echo ""
+          echo "查找包含 'phicomm' 的文件:"
+          find target/linux/ramips/dts -name "*phicomm*" | sort | while read file; do
+            echo "  📄 $file"
+          done
+
+      # ========== 2. 显示并修改 mt7620a_phicomm_k2x.dtsi (16M闪存) ==========
+      - name: 🔧 修改 mt7620a_phicomm_k2x.dtsi 支持16M闪存
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔧 修改 mt7620a_phicomm_k2x.dtsi 支持16M闪存"
+          echo "========================================="
+          
+          DTSI_FILE="target/linux/ramips/dts/mt7620a_phicomm_k2x.dtsi"
+          
+          if [ -f "$DTSI_FILE" ]; then
+            echo "📄 文件: $DTSI_FILE"
+            echo ""
+            echo "═══════════════════════════════"
+            echo "【修改前的内容】"
+            echo "═══════════════════════════════"
+            
+            # 显示分区定义
+            grep -A10 "partition@50000" "$DTSI_FILE" | head -15
+            
+            # 获取原始值
+            OLD_VALUE=$(grep "reg = <0x50000" "$DTSI_FILE" | grep -o "0x[0-9a-f]\+" | tail -1)
+            echo ""
+            echo "原始firmware大小: $OLD_VALUE (8MB)"
+            
+            # 备份原文件
+            cp "$DTSI_FILE" "${DTSI_FILE}.bak"
+            
+            # 修改为16MB (0x1fb0000)
+            sed -i 's/reg = <0x50000 0xfb0000>/reg = <0x50000 0x1fb0000>/' "$DTSI_FILE"
+            sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$DTSI_FILE"
+            
+            echo ""
+            echo "═══════════════════════════════"
+            echo "【修改后的内容】"
+            echo "═══════════════════════════════"
+            
+            # 显示修改后的分区定义
+            grep -A10 "partition@50000" "$DTSI_FILE" | head -15
+            
+            # 获取新值
+            NEW_VALUE=$(grep "reg = <0x50000" "$DTSI_FILE" | grep -o "0x[0-9a-f]\+" | tail -1)
+            echo ""
+            echo "修改后firmware大小: $NEW_VALUE (16MB)"
+            
+            if [ "$NEW_VALUE" = "0x1fb0000" ]; then
+              echo "✅ 16M闪存修改成功"
+            else
+              echo "❌ 修改失败"
+              exit 1
+            fi
+          else
+            echo "❌ 文件不存在: $DTSI_FILE"
+            echo "正在查找可用的mt7620a文件..."
+            ls -la target/linux/ramips/dts/mt7620a_* 2>/dev/null || echo "未找到mt7620a文件"
+            exit 1
+          fi
+
+      # ========== 3. 显示并修改 mt7620.mk 的 IMAGE_SIZE ==========
+      - name: 🔧 修改 mt7620.mk IMAGE_SIZE 为16M
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔧 修改 mt7620.mk IMAGE_SIZE 为16M"
+          echo "========================================="
+          
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          
+          if [ -f "$MK_FILE" ]; then
+            echo "📄 文件: $MK_FILE"
+            echo ""
+            echo "═══════════════════════════════"
+            echo "【修改前的内容】"
+            echo "═══════════════════════════════"
+            
+            # 显示phicomm_k2设备定义
+            echo "--- Device/phicomm_k2 定义 ---"
+            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE"
+            
+            # 获取原始IMAGE_SIZE
+            OLD_SIZE=$(sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" | grep -o "[0-9]\+k" || echo "未找到")
+            echo ""
+            echo "原始IMAGE_SIZE: $OLD_SIZE"
+            
+            # 备份原文件
+            cp "$MK_FILE" "${MK_FILE}.bak"
+            
+            # 修改为16MB (16064k)
+            sed -i '/define Device\/phicomm_k2/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+            
+            echo ""
+            echo "═══════════════════════════════"
+            echo "【修改后的内容】"
+            echo "═══════════════════════════════"
+            
+            # 显示修改后的设备定义
+            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE"
+            
+            # 获取新IMAGE_SIZE
+            NEW_SIZE=$(sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" | grep -o "[0-9]\+k")
+            echo ""
+            echo "修改后IMAGE_SIZE: $NEW_SIZE"
+            
+            if [ "$NEW_SIZE" = "16064k" ]; then
+              echo "✅ IMAGE_SIZE 修改成功"
+            else
+              echo "❌ IMAGE_SIZE 修改失败"
+              exit 1
+            fi
+          else
+            echo "❌ 文件不存在: $MK_FILE"
+            echo "正在查找可用的mk文件..."
+            find target/linux/ramips/image -name "*.mk" | xargs grep -l "phicomm_k2" 2>/dev/null || echo "未找到包含phicomm_k2的mk文件"
+            exit 1
+          fi
+
+      # ========== 4. 验证最终修改结果 ==========
+      - name: ✅ 验证最终修改结果
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "✅ 验证最终修改结果"
+          echo "========================================="
+          
+          # 验证 DTSI 文件
+          DTSI_FILE="target/linux/ramips/dts/mt7620a_phicomm_k2x.dtsi"
+          if [ -f "$DTSI_FILE" ]; then
+            FINAL_DTS_VALUE=$(grep "reg = <0x50000" "$DTSI_FILE" | grep -o "0x[0-9a-f]\+" | tail -1)
+            echo "DTS firmware 大小: $FINAL_DTS_VALUE"
+            if [ "$FINAL_DTS_VALUE" = "0x1fb0000" ]; then
+              echo "  └─ ✅ 正确 (16MB)"
+            else
+              echo "  └─ ❌ 错误 (应该是 0x1fb0000)"
+              exit 1
+            fi
+          fi
+          
+          # 验证 Makefile
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          if [ -f "$MK_FILE" ]; then
+            FINAL_MK_SIZE=$(sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" | grep -o "[0-9]\+k")
+            echo "Makefile IMAGE_SIZE: $FINAL_MK_SIZE"
+            if [ "$FINAL_MK_SIZE" = "16064k" ]; then
+              echo "  └─ ✅ 正确 (16MB)"
+            else
+              echo "  └─ ❌ 错误 (应该是 16064k)"
+              exit 1
+            fi
+          fi
+          
+          echo ""
+          echo "🎉 所有16M闪存相关修改已成功应用！"
+
+      # ========== 5. 创建配置文件（OpenWrt中文版 + ZeroTier + WireGuard）==========
+      - name: 📝 创建配置文件
+        run: |
+          cd openwrt
+          
+          echo "========================================="
+          echo "📝 创建配置文件"
+          echo "包含: OpenWrt中文版 + ZeroTier + WireGuard"
+          echo "========================================="
+          
+          # 使用逐行echo避免YAML语法错误
+          echo "CONFIG_TARGET_ramips=y" > .config
+          echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
+          echo "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
+          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
+          echo "CONFIG_PACKAGE_luci-theme-material=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-material-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_zerotier=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76-core=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76x0e=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76x2=y" >> .config
+          echo "CONFIG_MT76_LEDS=y" >> .config
+          echo "CONFIG_PACKAGE_iperf3=y" >> .config
+          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
+          echo "CONFIG_PACKAGE_iptables=y" >> .config
+          echo "CONFIG_PACKAGE_iptables-mod-conntrack-extra=y" >> .config
+          echo "CONFIG_PACKAGE_iptables-mod-extra=y" >> .config
+          echo "CONFIG_PACKAGE_iptables-mod-nat-extra=y" >> .config
+          echo "CONFIG_PACKAGE_htop=y" >> .config
+          echo "CONFIG_PACKAGE_nano=y" >> .config
+          echo "CONFIG_PACKAGE_curl=y" >> .config
+          echo "CONFIG_PACKAGE_wget=y" >> .config
+          echo "CONFIG_PACKAGE_tar=y" >> .config
+          echo "CONFIG_PACKAGE_unzip=y" >> .config
+          echo "CONFIG_PACKAGE_coreutils=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-ipt-nat6=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-ipt-raw=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-nathelper-extra=y" >> .config
+          
+          echo "✅ 配置文件创建完成"
+          echo ""
+          echo "已启用的中文语言包:"
+          grep "CONFIG_PACKAGE.*i18n.*zh-cn" .config | grep "=y" | sed 's/CONFIG_PACKAGE_//;s/=y//' | while read pkg; do
+            echo "  - $pkg"
+          done
+          
+          make defconfig
+
+      # ========== 6. 更新feeds ==========
+      - name: 🔄 更新feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # ========== 7. 下载源码包 ==========
+      - name: 📥 下载源码包
+        run: |
+          cd openwrt
+          make download -j8
+
+      # ========== 8. 编译固件 ==========
+      - name: ⚙️ 编译固件
+        run: |
+          cd openwrt
+          echo "开始编译时间: $(date)"
+          echo "编译过程可能需要1-2小时，请耐心等待..."
+          
+          make tools/compile -j$(nproc)
+          make toolchain/compile -j$(nproc)
+          make -j$(nproc) V=s
+          
+          echo "编译完成时间: $(date)"
+
+      # ========== 9. 整理固件文件 ==========
+      - name: 📦 整理固件文件
+        run: |
+          cd openwrt
+          mkdir -p firmware
+          
+          echo "查找固件文件..."
+          find bin/targets/ -name "*.bin" | while read file; do
+            cp "$file" firmware/
+            echo "已复制: $(basename $file)"
+          done
+          
+          cd firmware
+          echo "生成MD5校验文件..."
+          md5sum *.bin > md5sums.txt
+          
+          echo ""
+          echo "固件文件列表:"
+          ls -la *.bin
+
+      # ========== 10. 创建README文件（使用逐行echo）==========
+      - name: 📄 创建README文件
+        run: |
+          cd openwrt/firmware
+          
+          echo "================================================" > README.txt
+          echo "Phicomm K2 OpenWrt 24.10.5 Firmware" >> README.txt
+          echo "================================================" >> README.txt
+          echo "" >> README.txt
+          echo "【固件信息】" >> README.txt
+          echo "-----------" >> README.txt
+          echo "版本: OpenWrt 24.10.5" >> README.txt
+          echo "机型: 斐讯K2 (A1/A2) - 必须硬改16M闪存" >> README.txt
+          echo "闪存布局: 公版布局 (firmware分区起始: 0x50000)" >> README.txt
+          echo "界面: 简体中文 (默认)" >> README.txt
+          echo "集成: WireGuard + ZeroTier" >> README.txt
+          echo "" >> README.txt
+          echo "【已安装的中文语言包】" >> README.txt
+          echo "---------------------" >> README.txt
+          echo "- luci-i18n-base-zh-cn" >> README.txt
+          echo "- luci-i18n-firewall-zh-cn" >> README.txt
+          echo "- luci-i18n-opkg-zh-cn" >> README.txt
+          echo "- luci-i18n-wireguard-zh-cn" >> README.txt
+          echo "- luci-i18n-zerotier-zh-cn" >> README.txt
+          echo "- luci-i18n-material-zh-cn" >> README.txt
+          echo "" >> README.txt
+          echo "【集成功能】" >> README.txt
+          echo "---------" >> README.txt
+          echo "✅ WireGuard VPN (内核模块 + 中文界面)" >> README.txt
+          echo "✅ ZeroTier 组网 (客户端 + 中文界面)" >> README.txt
+          echo "✅ 完整中文语言包" >> README.txt
+          echo "✅ 2.4GHz & 5GHz 无线驱动" >> README.txt
+          echo "" >> README.txt
+          echo "【刷机步骤】" >> README.txt
+          echo "---------" >> README.txt
+          echo "1. 进入Breed (按住Reset键上电)" >> README.txt
+          echo "2. 选择'固件更新'" >> README.txt
+          echo "3. 选择本固件文件 (*.bin)" >> README.txt
+          echo "4. ⚠️ 闪存布局必须选'公版'或'0x50000'" >> README.txt
+          echo "5. 点击上传并确认" >> README.txt
+          echo "6. 等待自动重启 (约2分钟)" >> README.txt
+          echo "" >> README.txt
+          echo "【默认配置】" >> README.txt
+          echo "---------" >> README.txt
+          echo "管理地址: http://192.168.1.1" >> README.txt
+          echo "用户名: root" >> README.txt
+          echo "密码: (空密码)" >> README.txt
+          echo "" >> README.txt
+          echo "编译时间: $(date)" >> README.txt
+          echo "================================================" >> README.txt
+          
+          echo "✅ README文件创建完成"
+
+      # ========== 11. 上传固件 ==========
+      - name: ⬆️ 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: K2-16M-24.10.5-中文版-WireGuard-ZeroTier
+          path: openwrt/firmware/
+          retention-days: 30
