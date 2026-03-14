@@ -1,0 +1,163 @@
+name: Test K2 DTS in OpenWrt 24.10.1
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git findutils
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download OpenWrt 24.10.1 source
+        run: |
+          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git
+          cd openwrt
+          git fetch --tags
+          git checkout v24.10.1
+          echo "✅ OpenWrt 24.10.1 source downloaded"
+
+      # ========== 1. 查找所有DTS文件 ==========
+      - name: 🔍 Find all DTS files
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔍 查找所有DTS文件"
+          echo "========================================="
+          
+          echo "DTS文件总数:"
+          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" | wc -l
+          
+          echo ""
+          echo "前20个DTS文件:"
+          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" | sort | head -20
+
+      # ========== 2. 查找K2相关文件 ==========
+      - name: 🔍 Find K2 related files
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔍 查找包含 'k2' 的文件"
+          echo "========================================="
+          
+          find target/linux/ramips/dts -name "*k2*" -ls || echo "未找到包含k2的文件"
+          
+          echo ""
+          echo "========================================="
+          echo "🔍 查找包含 'phicomm' 的文件"
+          echo "========================================="
+          
+          find target/linux/ramips/dts -name "*phicomm*" -ls || echo "未找到包含phicomm的文件"
+
+      # ========== 3. 在文件内容中查找K2 ==========
+      - name: 🔍 Grep for K2 in DTS files
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔍 在DTS文件内容中查找 'k2'"
+          echo "========================================="
+          
+          grep -l "k2" $(find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi") 2>/dev/null | head -10 || echo "未找到"
+          
+          echo ""
+          echo "========================================="
+          echo "🔍 在DTS文件内容中查找 'phicomm'"
+          echo "========================================="
+          
+          grep -l "phicomm" $(find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi") 2>/dev/null | head -10 || echo "未找到"
+
+      # ========== 4. 查找分区定义 ==========
+      - name: 🔍 Find partition@50000 definitions
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔍 查找包含 'partition@50000' 的文件"
+          echo "========================================="
+          
+          grep -l "partition@50000" $(find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi") 2>/dev/null | head -10 || echo "未找到"
+          
+          echo ""
+          echo "========================================="
+          echo "🔍 显示找到的分区配置"
+          echo "========================================="
+          
+          for file in $(grep -l "partition@50000" $(find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi") 2>/dev/null | head -5); do
+            echo "文件: $file"
+            grep -A5 "partition@50000" "$file" | head -10
+            echo "---"
+          done
+
+      # ========== 5. 检查mt7620.mk中的设备定义 ==========
+      - name: 🔍 Check mt7620.mk for K2 device
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔍 检查 mt7620.mk 中的设备定义"
+          echo "========================================="
+          
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          
+          if [ -f "$MK_FILE" ]; then
+            echo "文件: $MK_FILE"
+            echo ""
+            echo "查找 phicomm_k2 定义:"
+            grep -n "phicomm_k2" "$MK_FILE" || echo "未找到"
+            echo ""
+            echo "Device/phicomm_k2 定义:"
+            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" || echo "未找到"
+          else
+            echo "❌ 未找到 $MK_FILE"
+          fi
+
+      # ========== 6. 检查v22.4特定文件 ==========
+      - name: 🔍 Check for v22.4 specific files
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔍 查找 v22.4 特定文件"
+          echo "========================================="
+          
+          find target/linux/ramips/dts -name "*v22.4*" -ls || echo "未找到v22.4文件"
+          find target/linux/ramips/dts -name "*k2x*" -ls || echo "未找到k2x文件"
+
+      # ========== 7. 总结 ==========
+      - name: 📊 Summary
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📊 测试总结 - OpenWrt 24.10.1"
+          echo "========================================="
+          
+          # 统计K2相关文件
+          K2_COUNT=$(find target/linux/ramips/dts -name "*k2*" | wc -l)
+          PHICOMM_COUNT=$(find target/linux/ramips/dts -name "*phicomm*" | wc -l)
+          V224_COUNT=$(find target/linux/ramips/dts -name "*v22.4*" | wc -l)
+          K2X_COUNT=$(find target/linux/ramips/dts -name "*k2x*" | wc -l)
+          
+          echo "包含 'k2' 的文件数: $K2_COUNT"
+          echo "包含 'phicomm' 的文件数: $PHICOMM_COUNT"
+          echo "包含 'v22.4' 的文件数: $V224_COUNT"
+          echo "包含 'k2x' 的文件数: $K2X_COUNT"
+          echo ""
+          
+          if [ $K2_COUNT -gt 0 ] || [ $PHICOMM_COUNT -gt 0 ]; then
+            echo "✅ K2的DTS文件可能存在！"
+          else
+            echo "❌ K2的DTS文件不存在！"
+          fi
+          
+          # 检查Makefile
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          if [ -f "$MK_FILE" ] && grep -q "phicomm_k2" "$MK_FILE"; then
+            echo "✅ Makefile中包含phicomm_k2定义"
+          else
+            echo "❌ Makefile中不包含phicomm_k2定义"
+          fi
