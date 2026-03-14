@@ -25,101 +25,37 @@ jobs:
           cd openwrt
           git fetch --tags
           git checkout v24.10.5
-          echo "✅ OpenWrt 24.10.5 source downloaded"
 
-      - name: Debug - List all DTS files
+      - name: Debug - List DTS files
         run: |
           cd openwrt
-          echo "========================================="
-          echo "🔍 调试信息：所有DTS文件列表"
-          echo "========================================="
-          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" | sort
-          echo ""
-          echo "========================================="
-          echo "🔍 调试信息：包含 'k2' 或 'phicomm' 的文件"
-          echo "========================================="
-          find target/linux/ramips/dts -name "*k2*" -o -name "*phicomm*" | sort
+          echo "DTS files:"
+          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" | head -20
 
-      - name: Debug - Show partition definitions
+      - name: Modify DTS for 16MB
         run: |
           cd openwrt
-          echo "========================================="
-          echo "🔍 查找包含 'partition@50000' 定义的文件"
-          echo "========================================="
-          # 使用临时文件避免管道语法问题
-          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" > /tmp/dts_files.txt
-          while read file; do
-            if grep -q "partition@50000" "$file" 2>/dev/null; then
-              echo "$file"
-            fi
-          done < /tmp/dts_files.txt
-          
-          echo ""
-          echo "========================================="
-          echo "🔍 显示找到的分区配置"
-          echo "========================================="
-          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" > /tmp/dts_files2.txt
-          count=0
-          while read file && [ $count -lt 3 ]; do
-            if grep -q "partition@50000" "$file" 2>/dev/null; then
-              echo "文件: $file"
-              grep -A5 "partition@50000" "$file" | head -10
-              echo "---"
-              count=$((count + 1))
-            fi
-          done < /tmp/dts_files2.txt
-
-      - name: Auto-modify DTS for 16MB flash
-        run: |
-          cd openwrt
-          echo "========================================="
-          echo "🔧 自动修改DTS文件支持16MB闪存"
-          echo "========================================="
-          
-          # 查找包含分区定义且包含k2/phicomm的文件
-          find target/linux/ramips/dts -name "*.dts" -o -name "*.dtsi" > /tmp/dts_files3.txt
-          modified=0
-          while read file; do
-            if echo "$file" | grep -q -i "k2\|phicomm" && grep -q "partition@50000" "$file" 2>/dev/null; then
-              echo "修改文件: $file"
-              cp "$file" "${file}.bak"
-              
-              echo "修改前:"
-              grep -A5 "partition@50000" "$file" | head -5
-              
-              sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$file"
-              sed -i 's/reg = <0x50000 0xfb0000>/reg = <0x50000 0x1fb0000>/' "$file"
-              
-              echo "修改后:"
-              grep -A5 "partition@50000" "$file" | head -5
-              echo "---"
-              modified=1
-            fi
-          done < /tmp/dts_files3.txt
-          
-          if [ $modified -eq 1 ]; then
-            echo "✅ 16MB闪存修改完成"
+          DTS_FILE="target/linux/ramips/dts/mt7620a_phicomm_k2x.dtsi"
+          if [ -f "$DTS_FILE" ]; then
+            echo "Modifying $DTS_FILE"
+            sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$DTS_FILE"
+            grep -A3 "partition@50000" "$DTS_FILE"
           else
-            echo "⚠️ 未找到K2相关的分区定义文件，将继续编译"
+            echo "DTS file not found, but continuing"
           fi
 
-      - name: Modify Makefile for 16MB
+      - name: Modify Makefile
         run: |
           cd openwrt
           MK_FILE="target/linux/ramips/image/mt7620.mk"
-          
           if [ -f "$MK_FILE" ]; then
-            echo "修改 Makefile: $MK_FILE"
             sed -i '/define Device\/phicomm_k2/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
-            echo "修改后的 IMAGE_SIZE:"
-            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE"
           fi
 
       - name: Create config file
         run: |
           cd openwrt
-          
-          # 使用逐行echo
+          # 使用逐行echo，避免多行字符串语法问题
           echo "CONFIG_TARGET_ramips=y" > .config
           echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
           echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
@@ -140,8 +76,11 @@ jobs:
           echo "CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_kmod-mt76-core=y" >> .config
           echo "CONFIG_PACKAGE_kmod-mt76x2=y" >> .config
+          echo "CONFIG_PACKAGE_iperf3=y" >> .config
+          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
+          echo "CONFIG_PACKAGE_htop=y" >> .config
+          echo "CONFIG_PACKAGE_nano=y" >> .config
           
-          make defconfig
           make defconfig
 
       - name: Update feeds
@@ -158,7 +97,6 @@ jobs:
       - name: Compile firmware
         run: |
           cd openwrt
-          echo "开始编译时间: $(date)"
           make tools/compile -j$(nproc)
           make toolchain/compile -j$(nproc)
           make -j$(nproc) V=s
