@@ -1,4 +1,4 @@
-name: Build K2 OpenWrt 24.10.5 16MB + ZeroTier + WireGuard + Chinese UI
+name:K2 OpenWrt 24.10.5 16MB + ZeroTier + WireGuard + CHN
 
 on:
   workflow_dispatch:
