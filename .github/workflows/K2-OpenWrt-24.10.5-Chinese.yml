@@ -33,79 +33,50 @@ jobs:
           cd openwrt
           git fetch --tags
           git checkout v24.10.5
-          echo "✅ OpenWrt 24.10.5 source downloaded"
 
-      - name: Debug - List DTS files
+      - name: Debug DTS files
         run: |
           cd openwrt
           echo "Listing all DTS files:"
-          find target/linux/ramips/dts -name "*.dts" | grep -i k2 || echo "No K2 DTS files found"
-          find target/linux/ramips/dts -name "*.dts" | grep -i phicomm || echo "No Phicomm DTS files found"
+          find target/linux/ramips/dts -name "*.dts" | head -20
 
-      - name: Modify for 16MB flash
+      - name: Modify for 16MB
         run: |
           cd openwrt
           
-          # 方法1: 尝试直接修改DTS文件（如果存在）
-          DTS_FILE="target/linux/ramips/dts/mt7620a_phicomm_k2.dts"
-          if [ ! -f "$DTS_FILE" ]; then
-            DTS_FILE="target/linux/ramips/dts/mt7620n_phicomm_k2.dts"
-          fi
+          # Try to find K2 DTS file
+          DTS_FILE=$(find target/linux/ramips/dts -name "*k2*.dts" -o -name "*phicomm*.dts" | head -1)
           
           if [ -f "$DTS_FILE" ]; then
-            echo "Found DTS file: $DTS_FILE"
-            cp "$DTS_FILE" "${DTS_FILE}.bak"
+            echo "Found DTS: $DTS_FILE"
             sed -i 's/reg = <0x50000 0xfb0000>/reg = <0x50000 0x1fb0000>/' "$DTS_FILE"
-            echo "✅ Modified DTS for 16MB"
-            grep -A5 "firmware" "$DTS_FILE" || echo "No firmware partition found"
-          else
-            echo "⚠️ DTS file not found, will use image builder method"
           fi
           
-          # 方法2: 修改Makefile中的IMAGE_SIZE（无论如何都要做）
+          # Always modify Makefile
           MK_FILE="target/linux/ramips/image/mt7620.mk"
           if [ -f "$MK_FILE" ]; then
-            echo "Modifying Makefile: $MK_FILE"
             sed -i '/define Device\/phicomm_k2/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
-            echo "✅ IMAGE_SIZE set to 16MB"
-            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE"
-          else
-            echo "❌ Makefile not found"
           fi
 
-      - name: Create config file
+      - name: Create config
         run: |
           cd openwrt
-          
-          cat > .config << 'EOF'
-CONFIG_TARGET_ramips=y
-CONFIG_TARGET_ramips_mt7620=y
-CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y
-CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_phicomm_k2=y
-CONFIG_TARGET_ROOTFS_PARTSIZE=16
-CONFIG_PACKAGE_luci=y
-CONFIG_PACKAGE_luci-ssl=y
-CONFIG_PACKAGE_luci-app-firewall=y
-CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
-CONFIG_LUCI_LANG_zh_Hans=y
-CONFIG_PACKAGE_kmod-wireguard=y
-CONFIG_PACKAGE_wireguard-tools=y
-CONFIG_PACKAGE_luci-app-wireguard=y
-CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y
-CONFIG_PACKAGE_zerotier=y
-CONFIG_PACKAGE_luci-app-zerotier=y
-CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y
-CONFIG_PACKAGE_kmod-mt76-core=y
-CONFIG_PACKAGE_kmod-mt76x2=y
-CONFIG_PACKAGE_iperf3=y
-CONFIG_PACKAGE_tcpdump=y
-CONFIG_PACKAGE_htop=y
-CONFIG_PACKAGE_nano=y
-EOF
-          
+          # 使用逐行echo，避免多行字符串语法问题
+          echo "CONFIG_TARGET_ramips=y" > .config
+          echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
+          echo "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_zerotier=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
           make defconfig
-          echo "✅ .config created"
 
       - name: Update feeds
         run: |
@@ -113,19 +84,19 @@ EOF
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Download packages
+      - name: Download
         run: |
           cd openwrt
           make download -j8
 
-      - name: Compile firmware
+      - name: Compile
         run: |
           cd openwrt
           make tools/compile -j$(nproc)
           make toolchain/compile -j$(nproc)
           make -j$(nproc) V=s || make -j1 V=s
 
-      - name: Upload firmware
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: K2-24.10.5-ChineseUI
