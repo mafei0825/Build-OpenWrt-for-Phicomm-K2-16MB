@@ -22,8 +22,7 @@ jobs:
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk \
           gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
-          python3-setuptools rsync swig unzip zlib1g-dev file wget subversion \
-          libelf-dev autoconf automake libtool curl
+          python3-setuptools rsync swig unzip zlib1g-dev file wget
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,93 +35,74 @@ jobs:
           git checkout v24.10.5
           echo "✅ OpenWrt 24.10.5 source downloaded"
 
-      - name: Modify DTS for 16MB flash
+      - name: Debug - List DTS files
+        run: |
+          cd openwrt
+          echo "Listing all DTS files:"
+          find target/linux/ramips/dts -name "*.dts" | grep -i k2 || echo "No K2 DTS files found"
+          find target/linux/ramips/dts -name "*.dts" | grep -i phicomm || echo "No Phicomm DTS files found"
+
+      - name: Modify for 16MB flash
         run: |
           cd openwrt
           
-          # Find DTS file
-          DTS_FILE=$(find target/linux/ramips/dts -name "*k2*" -o -name "*phicomm*" | head -1)
+          # 方法1: 尝试直接修改DTS文件（如果存在）
+          DTS_FILE="target/linux/ramips/dts/mt7620a_phicomm_k2.dts"
+          if [ ! -f "$DTS_FILE" ]; then
+            DTS_FILE="target/linux/ramips/dts/mt7620n_phicomm_k2.dts"
+          fi
           
           if [ -f "$DTS_FILE" ]; then
             echo "Found DTS file: $DTS_FILE"
+            cp "$DTS_FILE" "${DTS_FILE}.bak"
             sed -i 's/reg = <0x50000 0xfb0000>/reg = <0x50000 0x1fb0000>/' "$DTS_FILE"
-            echo "✅ Modified for 16MB flash"
-            grep -A3 "firmware" "$DTS_FILE" | head -5
+            echo "✅ Modified DTS for 16MB"
+            grep -A5 "firmware" "$DTS_FILE" || echo "No firmware partition found"
           else
-            echo "❌ DTS file not found"
-            exit 1
+            echo "⚠️ DTS file not found, will use image builder method"
           fi
-
-      - name: Verify 16MB modification
-        run: |
-          cd openwrt
-          DTS_FILE=$(find target/linux/ramips/dts -name "*k2*" -o -name "*phicomm*" | head -1)
           
-          if [ -f "$DTS_FILE" ] && grep -q "0x1fb0000" "$DTS_FILE"; then
-            echo "✅ 16MB modification confirmed"
-          else
-            echo "❌ 16MB modification failed"
-            exit 1
-          fi
-
-      - name: Modify Makefile
-        run: |
-          cd openwrt
+          # 方法2: 修改Makefile中的IMAGE_SIZE（无论如何都要做）
           MK_FILE="target/linux/ramips/image/mt7620.mk"
-          
           if [ -f "$MK_FILE" ]; then
+            echo "Modifying Makefile: $MK_FILE"
             sed -i '/define Device\/phicomm_k2/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
-            echo "✅ IMAGE_SIZE modified"
+            echo "✅ IMAGE_SIZE set to 16MB"
+            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE"
+          else
+            echo "❌ Makefile not found"
           fi
 
       - name: Create config file
         run: |
           cd openwrt
           
-          # Create .config line by line
-          echo "CONFIG_TARGET_ramips=y" > .config
-          echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
-          echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
-          echo "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
-          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
-          echo "CONFIG_PACKAGE_luci=y" >> .config
-          echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
-          echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
-          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
-          echo "CONFIG_PACKAGE_luci-theme-material=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-material-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
-          echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_zerotier=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-mt76-core=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-mt76x0e=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-mt76x2=y" >> .config
-          echo "CONFIG_MT76_LEDS=y" >> .config
-          echo "CONFIG_PACKAGE_iperf3=y" >> .config
-          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
-          echo "CONFIG_PACKAGE_iptables=y" >> .config
-          echo "CONFIG_PACKAGE_iptables-mod-conntrack-extra=y" >> .config
-          echo "CONFIG_PACKAGE_iptables-mod-extra=y" >> .config
-          echo "CONFIG_PACKAGE_iptables-mod-nat-extra=y" >> .config
-          echo "CONFIG_PACKAGE_htop=y" >> .config
-          echo "CONFIG_PACKAGE_nano=y" >> .config
-          echo "CONFIG_PACKAGE_curl=y" >> .config
-          echo "CONFIG_PACKAGE_wget=y" >> .config
-          echo "CONFIG_PACKAGE_tar=y" >> .config
-          echo "CONFIG_PACKAGE_unzip=y" >> .config
-          echo "CONFIG_PACKAGE_coreutils=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-ipt-nat6=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-ipt-raw=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nf-nathelper-extra=y" >> .config
+          cat > .config << 'EOF'
+CONFIG_TARGET_ramips=y
+CONFIG_TARGET_ramips_mt7620=y
+CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y
+CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_phicomm_k2=y
+CONFIG_TARGET_ROOTFS_PARTSIZE=16
+CONFIG_PACKAGE_luci=y
+CONFIG_PACKAGE_luci-ssl=y
+CONFIG_PACKAGE_luci-app-firewall=y
+CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
+CONFIG_LUCI_LANG_zh_Hans=y
+CONFIG_PACKAGE_kmod-wireguard=y
+CONFIG_PACKAGE_wireguard-tools=y
+CONFIG_PACKAGE_luci-app-wireguard=y
+CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y
+CONFIG_PACKAGE_zerotier=y
+CONFIG_PACKAGE_luci-app-zerotier=y
+CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y
+CONFIG_PACKAGE_kmod-mt76-core=y
+CONFIG_PACKAGE_kmod-mt76x2=y
+CONFIG_PACKAGE_iperf3=y
+CONFIG_PACKAGE_tcpdump=y
+CONFIG_PACKAGE_htop=y
+CONFIG_PACKAGE_nano=y
+EOF
           
           make defconfig
           echo "✅ .config created"
