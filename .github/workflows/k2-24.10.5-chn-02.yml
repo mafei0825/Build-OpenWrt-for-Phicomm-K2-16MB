@@ -49,6 +49,8 @@ jobs:
             echo "【修改后】"
             grep -A5 "partition@50000" "$FILE"
             echo "✅ v22.4 DTS 修改完成"
+          else
+            echo "❌ 文件不存在: $FILE"
           fi
 
       # ========== 修改 k2-v22.5.dts ==========
@@ -73,6 +75,8 @@ jobs:
             echo "【修改后】"
             grep -A5 "partition@a0000" "$FILE"
             echo "✅ v22.5 DTS 修改完成"
+          else
+            echo "❌ 文件不存在: $FILE"
           fi
 
       # ========== 修改 psg1218b.dts ==========
@@ -97,6 +101,8 @@ jobs:
             echo "【修改后】"
             grep -A5 "partition@50000" "$FILE"
             echo "✅ psg1218b DTS 修改完成"
+          else
+            echo "❌ 文件不存在: $FILE"
           fi
 
       # ========== 修改 k2g.dts ==========
@@ -121,6 +127,8 @@ jobs:
             echo "【修改后】"
             grep -A5 "partition@a0000" "$FILE"
             echo "✅ k2g DTS 修改完成"
+          else
+            echo "❌ 文件不存在: $FILE"
           fi
 
       # ========== 修改 Makefile 中的 IMAGE_SIZE ==========
@@ -130,24 +138,58 @@ jobs:
           MK_FILE="target/linux/ramips/image/mt7620.mk"
           
           if [ -f "$MK_FILE" ]; then
-            echo "📄 修改文件: $MK_FILE"
+            echo "📄 找到文件: $MK_FILE"
             echo ""
             echo "【修改前 IMAGE_SIZE】"
-            grep -E "phicomm_k2|phicomm_psg" "$MK_FILE" | grep "IMAGE_SIZE"
+            
+            # 显示修改前的值
+            echo "phicomm_k2-v22.4:"
+            grep -A5 "phicomm_k2-v22.4" "$MK_FILE" | grep "IMAGE_SIZE" || echo "  未找到"
+            
+            echo "phicomm_k2-v22.5:"
+            grep -A5 "phicomm_k2-v22.5" "$MK_FILE" | grep "IMAGE_SIZE" || echo "  未找到"
+            
+            echo "phicomm_k2g:"
+            grep -A5 "phicomm_k2g" "$MK_FILE" | grep "IMAGE_SIZE" || echo "  未找到"
+            
+            echo "phicomm_psg1218b:"
+            grep -A5 "phicomm_psg1218b" "$MK_FILE" | grep "IMAGE_SIZE" || echo "  未找到"
+            
+            echo ""
+            echo "【开始修改 IMAGE_SIZE】"
             
             # 备份
             cp "$MK_FILE" "${MK_FILE}.bak"
+            echo "✅ 已备份文件: ${MK_FILE}.bak"
             
-            # 修改所有相关设备的 IMAGE_SIZE 为 16MB (16064k)
-            sed -i '/phicomm_k2-v22.4/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
-            sed -i '/phicomm_k2-v22.5/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
-            sed -i '/phicomm_k2g/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
-            sed -i '/phicomm_psg1218b/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+            # 逐个修改
+            if grep -q "phicomm_k2-v22.4" "$MK_FILE"; then
+              sed -i '/phicomm_k2-v22.4/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+              echo "✅ phicomm_k2-v22.4 已修改为 16064k"
+            fi
+            
+            if grep -q "phicomm_k2-v22.5" "$MK_FILE"; then
+              sed -i '/phicomm_k2-v22.5/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+              echo "✅ phicomm_k2-v22.5 已修改为 16064k"
+            fi
+            
+            if grep -q "phicomm_k2g" "$MK_FILE"; then
+              sed -i '/phicomm_k2g/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+              echo "✅ phicomm_k2g 已修改为 16064k"
+            fi
+            
+            if grep -q "phicomm_psg1218b" "$MK_FILE"; then
+              sed -i '/phicomm_psg1218b/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+              echo "✅ phicomm_psg1218b 已修改为 16064k"
+            fi
             
             echo ""
             echo "【修改后 IMAGE_SIZE】"
-            grep -E "phicomm_k2|phicomm_psg" "$MK_FILE" | grep "IMAGE_SIZE"
-            echo "✅ Makefile 修改完成"
+            grep -E "phicomm_k2|phicomm_psg" "$MK_FILE" | grep "IMAGE_SIZE" || echo "未找到 IMAGE_SIZE 定义"
+            
+          else
+            echo "❌ 文件不存在: $MK_FILE"
+            exit 1
           fi
 
       # ========== 验证所有修改 ==========
@@ -159,21 +201,25 @@ jobs:
           echo "========================================="
           
           echo "【DTS文件验证】"
+          echo ""
           echo "v22.4:"
-          grep "reg = <0x50000" target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts
+          grep "reg = <0x50000" target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts 2>/dev/null || echo "  文件不存在"
+          
           echo ""
           echo "v22.5:"
-          grep "reg = <0xa0000" target/linux/ramips/dts/mt7620a_phicomm_k2-v22.5.dts
+          grep "reg = <0xa0000" target/linux/ramips/dts/mt7620a_phicomm_k2-v22.5.dts 2>/dev/null || echo "  文件不存在"
+          
           echo ""
           echo "psg1218b:"
-          grep "reg = <0x50000" target/linux/ramips/dts/mt7620a_phicomm_psg1218b.dts
+          grep "reg = <0x50000" target/linux/ramips/dts/mt7620a_phicomm_psg1218b.dts 2>/dev/null || echo "  文件不存在"
+          
           echo ""
           echo "k2g:"
-          grep "reg = <0xa0000" target/linux/ramips/dts/mt7620a_phicomm_k2g.dts
+          grep "reg = <0xa0000" target/linux/ramips/dts/mt7620a_phicomm_k2g.dts 2>/dev/null || echo "  文件不存在"
           
           echo ""
           echo "【Makefile验证】"
-          grep -E "phicomm_k2|phicomm_psg" target/linux/ramips/image/mt7620.mk | grep "IMAGE_SIZE"
+          grep -E "phicomm_k2|phicomm_psg" target/linux/ramips/image/mt7620.mk | grep "IMAGE_SIZE" || echo "未找到 IMAGE_SIZE 定义"
 
       # ========== 创建配置文件 ==========
       - name: 📝 创建配置文件
@@ -219,14 +265,82 @@ jobs:
         run: |
           cd openwrt
           echo "开始编译时间: $(date)"
+          echo "编译过程可能需要1-2小时，请耐心等待..."
+          
           make tools/compile -j$(nproc)
           make toolchain/compile -j$(nproc)
           make -j$(nproc) V=s
+          
           echo "编译完成时间: $(date)"
 
-      - name: 📦 上传固件
+      - name: 📦 整理固件文件
+        run: |
+          cd openwrt
+          mkdir -p firmware
+          
+          echo "查找固件文件..."
+          find bin/targets/ -name "*.bin" | while read file; do
+            cp "$file" firmware/
+            echo "已复制: $(basename $file)"
+          done
+          
+          cd firmware
+          echo "生成MD5校验文件..."
+          md5sum *.bin > md5sums.txt
+          
+          echo ""
+          echo "固件文件列表:"
+          ls -la *.bin
+
+      - name: 📄 创建README文件
+        run: |
+          cd openwrt/firmware
+          
+          echo "================================================" > README.txt
+          echo "Phicomm K2 OpenWrt 24.10.5 Firmware" >> README.txt
+          echo "================================================" >> README.txt
+          echo "" >> README.txt
+          echo "【固件信息】" >> README.txt
+          echo "版本: OpenWrt 24.10.5" >> README.txt
+          echo "机型: 斐讯K2 (A1/A2) - 必须硬改16M闪存" >> README.txt
+          echo "闪存布局: 公版布局 (firmware分区起始: 0x50000)" >> README.txt
+          echo "界面: 简体中文 (默认)" >> README.txt
+          echo "集成: WireGuard + ZeroTier" >> README.txt
+          echo "" >> README.txt
+          echo "【已安装的中文语言包】" >> README.txt
+          echo "- luci-i18n-base-zh-cn" >> README.txt
+          echo "- luci-i18n-firewall-zh-cn" >> README.txt
+          echo "- luci-i18n-opkg-zh-cn" >> README.txt
+          echo "- luci-i18n-wireguard-zh-cn" >> README.txt
+          echo "- luci-i18n-zerotier-zh-cn" >> README.txt
+          echo "" >> README.txt
+          echo "【集成功能】" >> README.txt
+          echo "✅ WireGuard VPN (内核模块 + 中文界面)" >> README.txt
+          echo "✅ ZeroTier 组网 (客户端 + 中文界面)" >> README.txt
+          echo "✅ 完整中文语言包" >> README.txt
+          echo "✅ 2.4GHz & 5GHz 无线驱动" >> README.txt
+          echo "" >> README.txt
+          echo "【刷机步骤】" >> README.txt
+          echo "1. 进入Breed (按住Reset键上电)" >> README.txt
+          echo "2. 选择'固件更新'" >> README.txt
+          echo "3. 选择本固件文件 (*.bin)" >> README.txt
+          echo "4. ⚠️ 闪存布局必须选'公版'或'0x50000'" >> README.txt
+          echo "5. 点击上传并确认" >> README.txt
+          echo "6. 等待自动重启 (约2分钟)" >> README.txt
+          echo "" >> README.txt
+          echo "【默认配置】" >> README.txt
+          echo "管理地址: http://192.168.1.1" >> README.txt
+          echo "用户名: root" >> README.txt
+          echo "密码: (空密码)" >> README.txt
+          echo "" >> README.txt
+          echo "编译时间: $(date)" >> README.txt
+          echo "================================================" >> README.txt
+          
+          echo "✅ README文件创建完成"
+
+      - name: ⬆️ 上传固件
         uses: actions/upload-artifact@v4
         with:
           name: K2-16M-24.10.5-中文版-WireGuard-ZeroTier
-          path: openwrt/bin/targets/**/*.bin
+          path: openwrt/firmware/
           retention-days: 30
