@@ -1,0 +1,135 @@
+name: Test OpenWrt 24.10.5 - Show mt7620.mk Content
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download OpenWrt 24.10.5 source
+        run: |
+          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git
+          cd openwrt
+          git fetch --tags
+          git checkout v24.10.5
+          echo "✅ OpenWrt 24.10.5 source downloaded"
+
+      # ========== 显示 mt7620.mk 完整内容 ==========
+      - name: 📄 Show mt7620.mk full content
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📄 mt7620.mk 完整内容"
+          echo "========================================="
+          
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          
+          if [ -f "$MK_FILE" ]; then
+            echo "文件路径: $MK_FILE"
+            echo "文件大小: $(wc -l < $MK_FILE) 行"
+            echo ""
+            echo "----- 文件内容 -----"
+            cat "$MK_FILE"
+          else
+            echo "❌ 文件不存在: $MK_FILE"
+            
+            # 尝试查找其他位置
+            echo ""
+            echo "正在查找所有mk文件..."
+            find target/linux/ramips -name "*.mk" | sort
+          fi
+
+      # ========== 显示 K2 相关定义 ==========
+      - name: 🔍 Show K2 related definitions
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔍 K2 相关定义"
+          echo "========================================="
+          
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          
+          if [ -f "$MK_FILE" ]; then
+            echo "--- 所有包含 'phicomm' 的行 ---"
+            grep -n "phicomm" "$MK_FILE" || echo "未找到"
+            
+            echo ""
+            echo "--- 所有包含 'k2' 的行 ---"
+            grep -n "k2" "$MK_FILE" || echo "未找到"
+            
+            echo ""
+            echo "--- 所有包含 'psg1218' 的行 ---"
+            grep -n "psg1218" "$MK_FILE" || echo "未找到"
+            
+            echo ""
+            echo "--- Device/phicomm_k2-v22.4 定义 ---"
+            sed -n '/define Device\/phicomm_k2-v22.4/,/endef/p' "$MK_FILE"
+            
+            echo ""
+            echo "--- Device/phicomm_k2-v22.5 定义 ---"
+            sed -n '/define Device\/phicomm_k2-v22.5/,/endef/p' "$MK_FILE"
+            
+            echo ""
+            echo "--- Device/phicomm_k2g 定义 ---"
+            sed -n '/define Device\/phicomm_k2g/,/endef/p' "$MK_FILE"
+            
+            echo ""
+            echo "--- Device/phicomm_psg1218b 定义 ---"
+            sed -n '/define Device\/phicomm_psg1218b/,/endef/p' "$MK_FILE"
+          fi
+
+      # ========== 显示 IMAGE_SIZE 值 ==========
+      - name: 📊 Show IMAGE_SIZE values
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📊 IMAGE_SIZE 值"
+          echo "========================================="
+          
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          
+          if [ -f "$MK_FILE" ]; then
+            echo "phicomm_k2-v22.4 IMAGE_SIZE:"
+            sed -n '/define Device\/phicomm_k2-v22.4/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" || echo "未找到"
+            
+            echo ""
+            echo "phicomm_k2-v22.5 IMAGE_SIZE:"
+            sed -n '/define Device\/phicomm_k2-v22.5/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" || echo "未找到"
+            
+            echo ""
+            echo "phicomm_k2g IMAGE_SIZE:"
+            sed -n '/define Device\/phicomm_k2g/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" || echo "未找到"
+            
+            echo ""
+            echo "phicomm_psg1218b IMAGE_SIZE:"
+            sed -n '/define Device\/phicomm_psg1218b/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" || echo "未找到"
+          fi
+
+      # ========== 文件信息统计 ==========
+      - name: 📁 File information
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📁 文件信息"
+          echo "========================================="
+          
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          
+          if [ -f "$MK_FILE" ]; then
+            echo "文件路径: $MK_FILE"
+            echo "文件权限: $(ls -l $MK_FILE)"
+            echo "最后修改: $(stat -c %y $MK_FILE 2>/dev/null || echo 'N/A')"
+            echo "文件大小: $(du -h $MK_FILE | cut -f1)"
+            echo "总行数: $(wc -l < $MK_FILE)"
+          fi
