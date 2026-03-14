@@ -1,0 +1,218 @@
+name: Test K2 DTS in OpenWrt 24.10.5 - Show All File Contents
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git findutils tree
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download OpenWrt 24.10.5 source
+        run: |
+          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git
+          cd openwrt
+          git fetch --tags
+          git checkout v24.10.5
+          echo "✅ OpenWrt 24.10.5 source downloaded"
+          echo "源码路径: $(pwd)"
+
+      # ========== 1. 显示目录结构 ==========
+      - name: 📁 Show directory structure
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📁 target/linux/ramips/dts 目录结构"
+          echo "========================================="
+          
+          if [ -d "target/linux/ramips/dts" ]; then
+            ls -la target/linux/ramips/dts | head -30
+          else
+            echo "目录不存在"
+          fi
+
+      # ========== 2. 查找所有K2相关文件 ==========
+      - name: 🔍 Find all K2 related files
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "🔍 查找所有K2相关文件"
+          echo "========================================="
+          
+          echo "--- 查找包含 'k2' 的文件 ---"
+          find target/linux/ramips/dts -name "*k2*" | sort | while read file; do
+            echo "  📄 $file"
+          done
+          
+          echo ""
+          echo "--- 查找包含 'phicomm' 的文件 ---"
+          find target/linux/ramips/dts -name "*phicomm*" | sort | while read file; do
+            echo "  📄 $file"
+          done
+          
+          echo ""
+          echo "--- 查找包含 'psg1218' 的文件 ---"
+          find target/linux/ramips/dts -name "*psg1218*" | sort | while read file; do
+            echo "  📄 $file"
+          done
+
+      # ========== 3. 显示mt7620a_phicomm_k2x.dtsi内容 ==========
+      - name: 📄 Show mt7620a_phicomm_k2x.dtsi content
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📄 mt7620a_phicomm_k2x.dtsi 内容"
+          echo "========================================="
+          
+          FILE="target/linux/ramips/dts/mt7620a_phicomm_k2x.dtsi"
+          
+          if [ -f "$FILE" ]; then
+            echo "文件路径: $FILE"
+            echo "文件大小: $(wc -l < $FILE) 行"
+            echo ""
+            echo "----- 文件内容 -----"
+            cat "$FILE"
+            echo ""
+            echo "----- 查找 'partition' 关键字 -----"
+            grep -n "partition" "$FILE" || echo "未找到partition"
+            echo ""
+            echo "----- 查找 'firmware' 关键字 -----"
+            grep -n "firmware" "$FILE" || echo "未找到firmware"
+            echo ""
+            echo "----- 查找 'reg = <' 关键字 -----"
+            grep -n "reg = <" "$FILE" || echo "未找到reg定义"
+          else
+            echo "❌ 文件不存在"
+          fi
+
+      # ========== 4. 显示mt7620a_phicomm_k2-v22.4.dts内容 ==========
+      - name: 📄 Show mt7620a_phicomm_k2-v22.4.dts content
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📄 mt7620a_phicomm_k2-v22.4.dts 内容"
+          echo "========================================="
+          
+          FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
+          
+          if [ -f "$FILE" ]; then
+            echo "文件路径: $FILE"
+            echo "文件大小: $(wc -l < $FILE) 行"
+            echo ""
+            echo "----- 文件内容 -----"
+            cat "$FILE"
+          else
+            echo "❌ 文件不存在"
+          fi
+
+      # ========== 5. 显示mt7620a_phicomm_k2-v22.5.dts内容 ==========
+      - name: 📄 Show mt7620a_phicomm_k2-v22.5.dts content
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📄 mt7620a_phicomm_k2-v22.5.dts 内容"
+          echo "========================================="
+          
+          FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.5.dts"
+          
+          if [ -f "$FILE" ]; then
+            echo "文件路径: $FILE"
+            echo "文件大小: $(wc -l < $FILE) 行"
+            echo ""
+            echo "----- 文件内容 -----"
+            cat "$FILE"
+          else
+            echo "❌ 文件不存在"
+          fi
+
+      # ========== 6. 显示mt7620a_phicomm_psg1218b.dts内容 ==========
+      - name: 📄 Show mt7620a_phicomm_psg1218b.dts content
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📄 mt7620a_phicomm_psg1218b.dts 内容"
+          echo "========================================="
+          
+          FILE="target/linux/ramips/dts/mt7620a_phicomm_psg1218b.dts"
+          
+          if [ -f "$FILE" ]; then
+            echo "文件路径: $FILE"
+            echo "文件大小: $(wc -l < $FILE) 行"
+            echo ""
+            echo "----- 文件内容 -----"
+            cat "$FILE"
+          else
+            echo "❌ 文件不存在"
+          fi
+
+      # ========== 7. 显示mt7620a_phicomm_k2g.dts内容 ==========
+      - name: 📄 Show mt7620a_phicomm_k2g.dts content
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📄 mt7620a_phicomm_k2g.dts 内容"
+          echo "========================================="
+          
+          FILE="target/linux/ramips/dts/mt7620a_phicomm_k2g.dts"
+          
+          if [ -f "$FILE" ]; then
+            echo "文件路径: $FILE"
+            echo "文件大小: $(wc -l < $FILE) 行"
+            echo ""
+            echo "----- 文件内容 -----"
+            cat "$FILE"
+          else
+            echo "❌ 文件不存在"
+          fi
+
+      # ========== 8. 显示mt7620.mk中K2相关定义 ==========
+      - name: 📄 Show mt7620.mk K2 definitions
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📄 mt7620.mk 中K2相关定义"
+          echo "========================================="
+          
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          
+          if [ -f "$MK_FILE" ]; then
+            echo "文件路径: $MK_FILE"
+            echo ""
+            echo "----- phicomm_k2 设备定义 -----"
+            sed -n '/define Device\/phicomm_k2/,/endef/p' "$MK_FILE"
+            echo ""
+            echo "----- 所有包含 phicomm 的行 -----"
+            grep -n "phicomm" "$MK_FILE"
+          else
+            echo "❌ 文件不存在"
+          fi
+
+      # ========== 9. 总结 ==========
+      - name: 📊 Summary
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "📊 测试总结 - OpenWrt 24.10.5"
+          echo "========================================="
+          
+          echo "K2相关文件统计:"
+          echo "----------------"
+          echo "包含 'k2' 的文件数: $(find target/linux/ramips/dts -name "*k2*" | wc -l)"
+          echo "包含 'phicomm' 的文件数: $(find target/linux/ramips/dts -name "*phicomm*" | wc -l)"
+          echo "包含 'psg1218' 的文件数: $(find target/linux/ramips/dts -name "*psg1218*" | wc -l)"
+          echo ""
+          
+          echo "找到的关键文件:"
+          echo "----------------"
+          find target/linux/ramips/dts -name "*k2x*" -o -name "*k2-v22*" | while read file; do
+            echo "✅ $file"
+          done
