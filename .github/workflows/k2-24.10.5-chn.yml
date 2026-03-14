@@ -1,4 +1,4 @@
-name: 编译K2 OpenWrt 24.10.5 16M闪存 + ZeroTier + WireGuard + 中文版
+name: K2 OpenWrt 24.10.5 16M + ZeroTier + WireGuard + chn
 
 on:
   workflow_dispatch:
@@ -201,7 +201,7 @@ jobs:
           echo "🎉 所有16M闪存相关修改已成功应用！"
 
       # ========== 5. 创建配置文件（OpenWrt中文版 + ZeroTier + WireGuard）==========
-      - name: 📝 创建配置文件 (OpenWrt中文版 + ZeroTier + WireGuard)
+      - name: 📝 创建配置文件
         run: |
           cd openwrt
           
@@ -210,73 +210,51 @@ jobs:
           echo "包含: OpenWrt中文版 + ZeroTier + WireGuard"
           echo "========================================="
           
-          cat > .config << 'EOF'
-# ===== 目标平台 =====
-CONFIG_TARGET_ramips=y
-CONFIG_TARGET_ramips_mt7620=y
-CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y
-CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_phicomm_k2=y
-
-# ===== 16M闪存设置 =====
-CONFIG_TARGET_ROOTFS_PARTSIZE=16
-
-# ===== LuCI 基础 =====
-CONFIG_PACKAGE_luci=y
-CONFIG_PACKAGE_luci-ssl=y
-CONFIG_PACKAGE_luci-app-firewall=y
-CONFIG_PACKAGE_luci-app-opkg=y
-
-# ===== 中文语言包 (OpenWrt中文版) =====
-CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y
-CONFIG_LUCI_LANG_zh_Hans=y
-
-# ===== 主题 =====
-CONFIG_PACKAGE_luci-theme-bootstrap=y
-CONFIG_PACKAGE_luci-theme-material=y
-CONFIG_PACKAGE_luci-i18n-material-zh-cn=y
-
-# ===== WireGuard =====
-CONFIG_PACKAGE_kmod-wireguard=y
-CONFIG_PACKAGE_wireguard-tools=y
-CONFIG_PACKAGE_luci-app-wireguard=y
-CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y
-
-# ===== ZeroTier =====
-CONFIG_PACKAGE_zerotier=y
-CONFIG_PACKAGE_luci-app-zerotier=y
-CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y
-
-# ===== 无线驱动 =====
-CONFIG_PACKAGE_kmod-mt76-core=y
-CONFIG_PACKAGE_kmod-mt76x0e=y
-CONFIG_PACKAGE_kmod-mt76x2=y
-CONFIG_MT76_LEDS=y
-
-# ===== 网络工具 =====
-CONFIG_PACKAGE_iperf3=y
-CONFIG_PACKAGE_tcpdump=y
-CONFIG_PACKAGE_iptables=y
-CONFIG_PACKAGE_iptables-mod-conntrack-extra=y
-CONFIG_PACKAGE_iptables-mod-extra=y
-CONFIG_PACKAGE_iptables-mod-nat-extra=y
-
-# ===== 系统工具 =====
-CONFIG_PACKAGE_htop=y
-CONFIG_PACKAGE_nano=y
-CONFIG_PACKAGE_curl=y
-CONFIG_PACKAGE_wget=y
-CONFIG_PACKAGE_tar=y
-CONFIG_PACKAGE_unzip=y
-CONFIG_PACKAGE_coreutils=y
-
-# ===== IPv6和NAT辅助 =====
-CONFIG_PACKAGE_kmod-ipt-nat6=y
-CONFIG_PACKAGE_kmod-ipt-raw=y
-CONFIG_PACKAGE_kmod-nf-nathelper-extra=y
-EOF
-
+          # 使用逐行echo避免YAML语法错误
+          echo "CONFIG_TARGET_ramips=y" > .config
+          echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
+          echo "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_phicomm_k2=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
+          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
+          echo "CONFIG_PACKAGE_luci-theme-material=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-material-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_zerotier=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76-core=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76x0e=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76x2=y" >> .config
+          echo "CONFIG_MT76_LEDS=y" >> .config
+          echo "CONFIG_PACKAGE_iperf3=y" >> .config
+          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
+          echo "CONFIG_PACKAGE_iptables=y" >> .config
+          echo "CONFIG_PACKAGE_iptables-mod-conntrack-extra=y" >> .config
+          echo "CONFIG_PACKAGE_iptables-mod-extra=y" >> .config
+          echo "CONFIG_PACKAGE_iptables-mod-nat-extra=y" >> .config
+          echo "CONFIG_PACKAGE_htop=y" >> .config
+          echo "CONFIG_PACKAGE_nano=y" >> .config
+          echo "CONFIG_PACKAGE_curl=y" >> .config
+          echo "CONFIG_PACKAGE_wget=y" >> .config
+          echo "CONFIG_PACKAGE_tar=y" >> .config
+          echo "CONFIG_PACKAGE_unzip=y" >> .config
+          echo "CONFIG_PACKAGE_coreutils=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-ipt-nat6=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-ipt-raw=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-nathelper-extra=y" >> .config
+          
           echo "✅ 配置文件创建完成"
           echo ""
           echo "已启用的中文语言包:"
