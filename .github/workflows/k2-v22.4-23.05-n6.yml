@@ -1,0 +1,184 @@
+name: K2 v22.4 OpenWrt 23.05.5 16M n6
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: 安装编译依赖
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+          gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+          python3-setuptools rsync swig unzip zlib1g-dev file wget
+
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 下载 OpenWrt 23.05.5 源码
+        run: |
+          git clone --depth 1 -b openwrt-23.05 https://github.com/openwrt/openwrt.git
+          cd openwrt
+          git fetch --tags
+          git checkout v23.05.5
+          echo "✅ OpenWrt 23.05.5 源码下载完成"
+
+      # ========== 关键步骤1：下载官方内核配置 ==========
+      - name: 📥 下载官方内核配置
+        run: |
+          cd openwrt
+          
+          # 下载官方内核配置文件
+          wget -O target/linux/ramips/mt7620/config-5.15 \
+          https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7620/config-5.15
+          
+          echo "✅ 官方内核配置已下载"
+          echo "内核配置预览（前10行）:"
+          head -10 target/linux/ramips/mt7620/config-5.15
+
+      # ========== 2. 16M闪存适配 ==========
+      - name: 🔧 修改 DTS 文件 (8MB -> 16MB)
+        run: |
+          cd openwrt
+          FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
+          
+          if [ -f "$FILE" ]; then
+            echo "========================================="
+            echo "📄 修改前 DTS 内容:"
+            echo "========================================="
+            cat "$FILE"
+            echo ""
+            echo "【执行修改】将 0x7b0000 替换为 0x1fb0000"
+            
+            # 备份原文件
+            cp "$FILE" "${FILE}.bak"
+            
+            # 将 8MB 分区大小改为 16MB
+            sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$FILE"
+            
+            echo ""
+            echo "========================================="
+            echo "📄 修改后 DTS 内容:"
+            echo "========================================="
+            cat "$FILE"
+            echo "✅ v22.4 DTS 修改完成"
+          else
+            echo "❌ 文件不存在: $FILE"
+            exit 1
+          fi
+
+      - name: 🔧 修改 Makefile (8MB -> 16MB)
+        run: |
+          cd openwrt
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          
+          if [ -f "$MK_FILE" ]; then
+            echo "========================================="
+            echo "📄 修改前 Makefile 内容:"
+            echo "========================================="
+            cat "$MK_FILE"
+            echo ""
+            echo "【执行修改】将 IMAGE_SIZE 改为 16064k"
+            
+            # 备份原文件
+            cp "$MK_FILE" "${MK_FILE}.bak"
+            
+            # 修改 v22.4 的 IMAGE_SIZE 为 16064k
+            sed -i '/phicomm_k2-v22.4/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+            
+            echo ""
+            echo "========================================="
+            echo "📄 修改后 Makefile 内容:"
+            echo "========================================="
+            cat "$MK_FILE"
+            echo "✅ Makefile 修改完成"
+          else
+            echo "❌ 文件不存在: $MK_FILE"
+            exit 1
+          fi
+
+      # ========== 3. 创建配置文件（从官方配置精简）==========
+      - name: 📝 创建配置文件（官方配置 + 只保留K2 v22.4）
+        run: |
+          cd openwrt
+          
+          # 下载官方完整配置
+          wget -O .config.full \
+          https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7620/config.buildinfo
+          
+          echo "✅ 官方配置下载完成"
+          
+          # 删除所有设备定义，只保留基础配置
+          grep -v "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_" .config.full | \
+          grep -v "CONFIG_TARGET_DEVICE_PACKAGES_" > .config
+          
+          # 添加K2 v22.4为唯一设备
+          echo "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
+          
+          # 设置16M闪存
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+          
+          # 运行defconfig补全依赖
+          make defconfig
+          
+          # 验证配置
+          echo "✅ 配置文件创建完成，包含以下设备:"
+          grep "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_" .config | grep "=y"
+          
+          echo ""
+          echo "✅ LuCI相关包（官方配置自带）:"
+          grep "CONFIG_PACKAGE_luci" .config | grep "=y" | head -10
+
+      # ========== 4. 更新 Feeds ==========
+      - name: 🔄 更新 Feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # ========== 5. 下载源代码 ==========
+      - name: 📥 下载源代码
+        run: |
+          cd openwrt
+          make download -j8
+
+      # ========== 6. 编译固件 ==========
+      - name: ⚙️ 编译固件
+        run: |
+          cd openwrt
+          echo "开始编译时间: $(date)"
+          echo "使用官方配置编译K2 v22.4（16M闪存适配）..."
+          make -j$(nproc) V=s
+          echo "编译完成时间: $(date)"
+
+      # ========== 7. 整理固件文件 ==========
+      - name: 📦 整理固件文件
+        run: |
+          cd openwrt
+          mkdir -p firmware
+          
+          echo "查找固件文件..."
+          find bin/targets/ -name "*k2-v22.4*.bin" -o -name "*sysupgrade*.bin" | while read file; do
+            cp "$file" firmware/
+            echo "已复制: $(basename $file)"
+          done
+          
+          cd firmware
+          echo "生成MD5校验文件..."
+          md5sum *.bin > md5sums.txt 2>/dev/null || echo "无bin文件"
+          
+          echo ""
+          echo "固件文件列表:"
+          ls -la *.bin 2>/dev/null || echo "无固件文件"
+
+      # ========== 8. 上传固件 ==========
+      - name: ⬆️ 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: K2-v22.4-16M-23.05.5-官方配置精简版
+          path: openwrt/firmware/
+          retention-days: 30
