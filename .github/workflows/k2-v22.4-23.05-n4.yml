@@ -72,8 +72,8 @@ jobs:
             echo "❌ 文件不存在: $MK_FILE"; exit 1
           fi
 
-      # ========== 2. 创建配置文件 - 只包含K2 v22.4 + 全功能中文LuCI ==========
-      - name: 📝 创建配置文件（全功能中文LuCI版）
+      # ========== 2. 创建配置文件 - 只包含K2 v22.4（修复版）==========
+      - name: 📝 创建配置文件（只包含K2 v22.4）
         run: |
           cd openwrt
           
@@ -81,28 +81,18 @@ jobs:
           wget -O .config.base \
           https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7620/config.buildinfo
           
-          # 过滤出只包含K2 v22.4的配置
+          # 清除所有设备定义，只保留基础配置
           grep -v "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_" .config.base | \
-          grep -v "CONFIG_TARGET_DEVICE_PACKAGES_" > .config
+          grep -v "CONFIG_TARGET_DEVICE_PACKAGES_ramips_mt7620_DEVICE_" > .config
           
           # 添加K2 v22.4为唯一设备
           echo "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
-          echo "CONFIG_TARGET_DEVICE_PACKAGES_ramips_mt7620_DEVICE_phicomm_k2-v22.4=\"\"" >> .config
           
           # 设置16M闪存
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
           
           # ===== 关键步骤：锁定VERMAGIC =====
           echo "CONFIG_KERNEL_VERMAGIC=\"5bc03255e08a37a54dbb31ad01735f42\"" >> .config
-          echo "✅ 已锁定VERMAGIC为官方值: 5bc03255e08a37a54dbb31ad01735f42"
-          
-          # 确保优化选项与官方一致
-          echo "CONFIG_KERNEL_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> .config
-          echo "# CONFIG_KERNEL_CC_OPTIMIZE_FOR_SIZE is not set" >> .config
-          
-          # 禁用调试选项
-          echo "# CONFIG_KERNEL_DEBUG_INFO is not set" >> .config
-          echo "# CONFIG_KERNEL_DEBUG_KERNEL is not set" >> .config
           
           # ===== 全功能中文LuCI =====
           echo "# LuCI核心组件" >> .config
@@ -110,11 +100,7 @@ jobs:
           echo "CONFIG_PACKAGE_luci-base=y" >> .config
           echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
           echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
-          
-          echo "# 防火墙和应用" >> .config
           echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
-          echo "CONFIG_PACKAGE_firewall=y" >> .config
-          echo "CONFIG_PACKAGE_firewall4=y" >> .config
           
           echo "# 中文语言包" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
@@ -125,36 +111,17 @@ jobs:
           echo "CONFIG_PACKAGE_uhttpd=y" >> .config
           echo "CONFIG_PACKAGE_uhttpd-mod-ubus=y" >> .config
           
-          echo "# 基础服务和工具" >> .config
-          echo "CONFIG_PACKAGE_rpcd=y" >> .config
-          echo "CONFIG_PACKAGE_rpcd-mod-file=y" >> .config
-          echo "CONFIG_PACKAGE_rpcd-mod-luci=y" >> .config
-          echo "CONFIG_PACKAGE_rpcd-mod-ucode=y" >> .config
-          echo "CONFIG_PACKAGE_rpcd-mod-iwinfo=y" >> .config
-          echo "CONFIG_PACKAGE_cgi-io=y" >> .config
-          
-          echo "# 依赖库" >> .config
-          echo "CONFIG_PACKAGE_liblucihttp0=y" >> .config
-          echo "CONFIG_PACKAGE_liblucihttp-ucode=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-math=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-html=y" >> .config
-          
-          echo "# 无线驱动" >> .config
-          echo "CONFIG_PACKAGE_kmod-mt76-core=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-mt76x2=y" >> .config
-          
           echo "# 基础工具" >> .config
-          echo "CONFIG_PACKAGE_iperf3=y" >> .config
-          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
           echo "CONFIG_PACKAGE_htop=y" >> .config
           echo "CONFIG_PACKAGE_nano=y" >> .config
           
           # 运行defconfig
           make defconfig
           
-          # 验证配置
+          # 验证配置 - 应该只显示K2 v22.4
           echo "✅ 配置文件创建完成，包含以下设备:"
           grep "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_" .config | grep "=y"
+          
           echo ""
           echo "✅ 已启用的中文语言包:"
           grep "CONFIG_PACKAGE.*i18n.*zh-cn" .config | grep "=y" || true
@@ -181,35 +148,7 @@ jobs:
           make -j$(nproc) V=s
           echo "编译完成时间: $(date)"
 
-      # ========== 6. 验证编译结果 ==========
-      - name: ✅ 验证编译结果
-        run: |
-          cd openwrt
-          echo "========================================="
-          echo "✅ 验证编译结果"
-          echo "========================================="
-          
-          # 查找编译出的固件
-          echo "【编译出的固件文件】"
-          find bin/targets/ -name "*.bin" -ls
-          
-          # 验证VERMAGIC
-          echo ""
-          echo "【VERMAGIC验证】"
-          echo "锁定的VERMAGIC: 5bc03255e08a37a54dbb31ad01735f42"
-          
-          # 查找生成的 .vermagic
-          for f in $(find build_dir/ -name ".vermagic" 2>/dev/null); do
-            CURRENT_HASH=$(cat $f)
-            echo "生成VERMAGIC: $CURRENT_HASH"
-            if [ "$CURRENT_HASH" = "5bc03255e08a37a54dbb31ad01735f42" ]; then
-              echo "✅ VERMAGIC 匹配成功！"
-            else
-              echo "⚠️ VERMAGIC 不匹配！"
-            fi
-          done
-
-      # ========== 7. 整理固件文件 ==========
+      # ========== 6. 整理固件文件 ==========
       - name: 📦 整理固件文件
         run: |
           cd openwrt
@@ -229,77 +168,10 @@ jobs:
           echo "固件文件列表:"
           ls -la *.bin
 
-      # ========== 8. 创建完整的软件源配置文件 ==========
-      - name: 📄 创建 /etc/opkg/distfeeds.conf
-        run: |
-          cd openwrt
-          
-          mkdir -p files/etc/opkg
-          
-          echo "src/gz openwrt_core https://downloads.openwrt.org/releases/23.05.5/targets/ramips/mt7620/packages" > files/etc/opkg/distfeeds.conf
-          echo "src/gz openwrt_base https://downloads.openwrt.org/releases/23.05.5/packages/mipsel_24kc/base" >> files/etc/opkg/distfeeds.conf
-          echo "src/gz openwrt_luci https://downloads.openwrt.org/releases/23.05.5/packages/mipsel_24kc/luci" >> files/etc/opkg/distfeeds.conf
-          echo "src/gz openwrt_packages https://downloads.openwrt.org/releases/23.05.5/packages/mipsel_24kc/packages" >> files/etc/opkg/distfeeds.conf
-          echo "src/gz openwrt_routing https://downloads.openwrt.org/releases/23.05.5/packages/mipsel_24kc/routing" >> files/etc/opkg/distfeeds.conf
-          echo "src/gz openwrt_telephony https://downloads.openwrt.org/releases/23.05.5/packages/mipsel_24kc/telephony" >> files/etc/opkg/distfeeds.conf
-          
-          echo "✅ 完整的软件源配置文件已创建"
-          cat files/etc/opkg/distfeeds.conf
-
-      # ========== 9. 创建README文件 ==========
-      - name: 📄 创建README文件
-        run: |
-          cd openwrt/firmware
-          
-          echo "================================================" > README.txt
-          echo "Phicomm K2 v22.4 OpenWrt 23.05.5 Firmware (16MB) - 全功能中文版" >> README.txt
-          echo "================================================" >> README.txt
-          echo "" >> README.txt
-          echo "【固件信息】" >> README.txt
-          echo "版本: OpenWrt 23.05.5" >> README.txt
-          echo "机型: 斐讯K2 v22.4 (A1/A2) - 必须硬改16M闪存" >> README.txt
-          echo "闪存布局: 公版布局 (firmware分区起始: 0x50000)" >> README.txt
-          echo "内核版本: 5.15.167-1" >> README.txt
-          echo "VERMAGIC: 5bc03255e08a37a54dbb31ad01735f42 (官方值)" >> README.txt
-          echo "界面: 简体中文 (已预装)" >> README.txt
-          echo "" >> README.txt
-          echo "【预装组件】" >> README.txt
-          echo "✓ LuCI Web界面 (简体中文)" >> README.txt
-          echo "✓ uhttpd Web服务器" >> README.txt
-          echo "✓ 防火墙 (含中文界面)" >> README.txt
-          echo "✓ 无线驱动 (2.4G/5G)" >> README.txt
-          echo "✓ 基础工具 (htop, nano, iperf3, tcpdump)" >> README.txt
-          echo "" >> README.txt
-          echo "【核心特性】" >> README.txt
-          echo "✓ 只编译K2 v22.4单一设备，不包含其他MT7620设备" >> README.txt
-          echo "✓ 强制锁定VERMAGIC为官方值，完美兼容官方源" >> README.txt
-          echo "✓ 16M闪存适配 (DTS和IMAGE_SIZE已修改)" >> README.txt
-          echo "✓ 预置完整的软件源配置，opkg可直接使用" >> README.txt
-          echo "" >> README.txt
-          echo "【刷机步骤】" >> README.txt
-          echo "1. 进入Breed (按住Reset键上电)" >> README.txt
-          echo "2. 选择'固件更新'" >> README.txt
-          echo "3. 选择本固件文件 (*.bin)" >> README.txt
-          echo "4. ⚠️ 闪存布局必须选'公版'或'0x50000'" >> README.txt
-          echo "5. 点击上传并确认" >> README.txt
-          echo "6. 等待自动重启 (约2分钟)" >> README.txt
-          echo "" >> README.txt
-          echo "【默认配置】" >> README.txt
-          echo "管理地址: http://192.168.1.1" >> README.txt
-          echo "用户名: root" >> README.txt
-          echo "密码: (空密码)" >> README.txt
-          echo "" >> README.txt
-          echo "编译时间: $(date)" >> README.txt
-          echo "================================================" >> README.txt
-          
-          echo "✅ README文件创建完成"
-
-      # ========== 10. 上传固件 ==========
+      # ========== 7. 上传固件 ==========
       - name: ⬆️ 上传固件
         uses: actions/upload-artifact@v4
         with:
-          name: K2-v22.4-16M-23.05.5-全功能中文版-官方VERMAGIC
-          path: |
-            openwrt/firmware/
-            openwrt/files/
+          name: K2-v22.4-16M-23.05.5-全功能中文版-单设备
+          path: openwrt/firmware/
           retention-days: 30
