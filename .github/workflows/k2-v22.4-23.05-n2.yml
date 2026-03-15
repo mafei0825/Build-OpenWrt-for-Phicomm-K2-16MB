@@ -174,7 +174,7 @@ jobs:
             ls -la $PACKAGE_DIR | grep -E "luci|i18n|zh-cn" || echo "未找到LuCI包"
             
             # 统计中文包数量
-            ZH_CN_COUNT=$(ls $PACKAGE_DIR | grep "zh-cn" | wc -l)
+            ZH_CN_COUNT=$(ls $PACKAGE_DIR | grep "zh-cn" | wc -l 2>/dev/null || echo 0)
             echo "中文语言包数量: $ZH_CN_COUNT"
             
             if [ $ZH_CN_COUNT -gt 0 ]; then
@@ -198,77 +198,77 @@ jobs:
           
           cd firmware
           echo "生成MD5校验文件..."
-          md5sum *.bin > md5sums.txt
+          md5sum *.bin > md5sums.txt 2>/dev/null || echo "无bin文件"
           
           echo ""
           echo "固件文件列表:"
-          ls -la *.bin
+          ls -la *.bin 2>/dev/null || echo "无固件文件"
 
-      # ========== 8. 创建README文件 ==========
+      # ========== 8. 创建README文件（使用逐行echo）==========
       - name: 📄 创建README文件
         run: |
           cd openwrt/firmware
           
-          cat > README.txt << 'EOF'
-================================================
-Phicomm K2 v22.4 OpenWrt 23.05.5 Firmware (16MB)
-================================================
-
-【固件信息】
-- 版本: OpenWrt 23.05.5
-- 机型: 斐讯K2 v22.4 (A1/A2) - 必须硬改16M闪存
-- 闪存布局: 公版布局 (firmware分区起始: 0x50000)
-- 内核版本: 5.15.x
-- 界面: 简体中文 (默认)
-
-【已安装的LuCI组件】
-✓ luci (主包)
-✓ luci-base (基础库)
-✓ luci-mod-admin-full (管理界面)
-✓ luci-theme-bootstrap (默认主题)
-✓ luci-app-firewall (防火墙)
-✓ luci-app-opkg (软件包管理)
-✓ luci-proto-ipv6 (IPv6支持)
-✓ luci-proto-ppp (PPPoE支持)
-✓ luci-mod-status (状态页面)
-✓ luci-mod-system (系统页面)
-✓ luci-mod-network (网络页面)
-✓ luci-light (精简版)
-
-【中文语言包】
-✓ luci-i18n-base-zh-cn (基础中文)
-✓ luci-i18n-firewall-zh-cn (防火墙中文)
-
-【防火墙内核模块】
-✓ kmod-ipt-core
-✓ kmod-ipt-conntrack
-✓ kmod-ipt-nat
-✓ kmod-ipt-raw
-
-【验证说明】
-本固件基于你成功手动安装的记录编译，确保开箱即用中文界面。
-
-【刷机步骤】
-1. 进入Breed (按住Reset键上电)
-2. 选择"固件更新"
-3. 选择本固件文件 (*.bin)
-4. ⚠️ 闪存布局必须选"公版"或"0x50000"
-5. 点击上传并确认
-6. 等待自动重启 (约2分钟)
-
-【默认配置】
-- 管理地址: http://192.168.1.1
-- 用户名: root
-- 密码: (空密码)
-
-【验证方法】
-登录后可直接查看:
-- 系统 → 软件包 → 已安装的luci包
-- 系统 → 语言与风格 → 简体中文
-
-编译时间: $(date)
-================================================
-EOF
+          # 使用逐行echo避免YAML语法错误
+          echo "================================================" > README.txt
+          echo "Phicomm K2 v22.4 OpenWrt 23.05.5 Firmware (16MB)" >> README.txt
+          echo "================================================" >> README.txt
+          echo "" >> README.txt
+          echo "【固件信息】" >> README.txt
+          echo "版本: OpenWrt 23.05.5" >> README.txt
+          echo "机型: 斐讯K2 v22.4 (A1/A2) - 必须硬改16M闪存" >> README.txt
+          echo "闪存布局: 公版布局 (firmware分区起始: 0x50000)" >> README.txt
+          echo "内核版本: 5.15.x" >> README.txt
+          echo "界面: 简体中文 (默认)" >> README.txt
+          echo "" >> README.txt
+          echo "【已安装的LuCI组件】" >> README.txt
+          echo "✓ luci (主包)" >> README.txt
+          echo "✓ luci-base (基础库)" >> README.txt
+          echo "✓ luci-mod-admin-full (管理界面)" >> README.txt
+          echo "✓ luci-theme-bootstrap (默认主题)" >> README.txt
+          echo "✓ luci-app-firewall (防火墙)" >> README.txt
+          echo "✓ luci-app-opkg (软件包管理)" >> README.txt
+          echo "✓ luci-proto-ipv6 (IPv6支持)" >> README.txt
+          echo "✓ luci-proto-ppp (PPPoE支持)" >> README.txt
+          echo "✓ luci-mod-status (状态页面)" >> README.txt
+          echo "✓ luci-mod-system (系统页面)" >> README.txt
+          echo "✓ luci-mod-network (网络页面)" >> README.txt
+          echo "✓ luci-light (精简版)" >> README.txt
+          echo "" >> README.txt
+          echo "【中文语言包】" >> README.txt
+          echo "✓ luci-i18n-base-zh-cn (基础中文)" >> README.txt
+          echo "✓ luci-i18n-firewall-zh-cn (防火墙中文)" >> README.txt
+          echo "" >> README.txt
+          echo "【防火墙内核模块】" >> README.txt
+          echo "✓ kmod-ipt-core" >> README.txt
+          echo "✓ kmod-ipt-conntrack" >> README.txt
+          echo "✓ kmod-ipt-nat" >> README.txt
+          echo "✓ kmod-ipt-raw" >> README.txt
+          echo "" >> README.txt
+          echo "【验证说明】" >> README.txt
+          echo "本固件基于你成功手动安装的记录编译，确保开箱即用中文界面。" >> README.txt
+          echo "" >> README.txt
+          echo "【刷机步骤】" >> README.txt
+          echo "1. 进入Breed (按住Reset键上电)" >> README.txt
+          echo "2. 选择'固件更新'" >> README.txt
+          echo "3. 选择本固件文件 (*.bin)" >> README.txt
+          echo "4. ⚠️ 闪存布局必须选'公版'或'0x50000'" >> README.txt
+          echo "5. 点击上传并确认" >> README.txt
+          echo "6. 等待自动重启 (约2分钟)" >> README.txt
+          echo "" >> README.txt
+          echo "【默认配置】" >> README.txt
+          echo "管理地址: http://192.168.1.1" >> README.txt
+          echo "用户名: root" >> README.txt
+          echo "密码: (空密码)" >> README.txt
+          echo "" >> README.txt
+          echo "【验证方法】" >> README.txt
+          echo "登录后可直接查看:" >> README.txt
+          echo "- 系统 → 软件包 → 已安装的luci包" >> README.txt
+          echo "- 系统 → 语言与风格 → 简体中文" >> README.txt
+          echo "" >> README.txt
+          echo "编译时间: $(date)" >> README.txt
+          echo "================================================" >> README.txt
+          
           echo "✅ README文件创建完成"
 
       # ========== 9. 上传固件 ==========
