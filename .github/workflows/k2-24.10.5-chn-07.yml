@@ -1,0 +1,172 @@
+name: K2 v22.4 OpenWrt 24.10.5 16M + chn  n7
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: 安装编译依赖
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+          gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+          python3-setuptools rsync swig unzip zlib1g-dev file wget
+
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 下载 OpenWrt 24.10.5 源码
+        run: |
+          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git
+          cd openwrt
+          git fetch --tags
+          git checkout v24.10.5
+          echo "✅ OpenWrt 24.10.5 源码下载完成"
+
+      # ========== 1. 16M闪存适配与修改记录查看 ==========
+      - name: 🔧 修改 DTS 文件 (8MB -> 16MB) 并查看修改
+        run: |
+          cd openwrt
+          FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
+          if [ -f "$FILE" ]; then
+            echo "========================================="
+            echo "📄 修改前 DTS 内容:"
+            echo "========================================="
+            cat "$FILE"
+            echo ""
+            echo "【执行修改】将 0x7b0000 替换为 0x1fb0000"
+            sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$FILE"
+            echo ""
+            echo "========================================="
+            echo "📄 修改后 DTS 内容:"
+            echo "========================================="
+            cat "$FILE"
+            echo "✅ v22.4 DTS 修改完成"
+          else
+            echo "❌ 文件不存在: $FILE"; exit 1
+          fi
+
+      - name: 🔧 修改 Makefile (8MB -> 16MB) 并查看修改
+        run: |
+          cd openwrt
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          if [ -f "$MK_FILE" ]; then
+            echo "========================================="
+            echo "📄 修改前 Makefile 内容:"
+            echo "========================================="
+            cat "$MK_FILE"
+            echo ""
+            echo "【执行修改】将 IMAGE_SIZE 改为 16064k"
+            sed -i '/phicomm_k2-v22.4/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+            echo ""
+            echo "========================================="
+            echo "📄 修改后 Makefile 内容:"
+            echo "========================================="
+            cat "$MK_FILE"
+            echo "✅ Makefile 修改完成"
+          else
+            echo "❌ 文件不存在: $MK_FILE"; exit 1
+          fi
+
+      # ========== 2. 核心配置：基于你成功安装的记录 ==========
+      - name: 📝 创建核心配置文件 (基于成功安装记录)
+        run: |
+          cd openwrt
+          # 基础平台
+          echo "CONFIG_TARGET_ramips=y" > .config
+          echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+
+          # 1. 你手动安装成功的 LuCI 核心模块
+          echo "CONFIG_PACKAGE_luci=y" >> .config          # 主包
+          echo "CONFIG_PACKAGE_luci-base=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
+          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-package-manager=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-ipv6=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-ppp=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-status=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-system=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-network=y" >> .config
+          echo "CONFIG_PACKAGE_luci-light=y" >> .config
+
+          # 2. 防火墙及其内核模块 (你手动确认已安装的)
+          echo "CONFIG_PACKAGE_firewall=y" >> .config
+          echo "CONFIG_PACKAGE_firewall4=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-ipt-core=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-ipt-conntrack=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-ipt-nat=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-ipt-raw=y" >> .config
+
+          # 3. 中文语言包 (你成功安装的)
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
+
+          # 4. 基础服务和工具
+          echo "CONFIG_PACKAGE_uhttpd=y" >> .config
+          echo "CONFIG_PACKAGE_uhttpd-mod-ubus=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-file=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-luci=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-ucode=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-iwinfo=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-rrdns=y" >> .config
+          echo "CONFIG_PACKAGE_cgi-io=y" >> .config
+
+          # 5. 无线驱动和工具
+          echo "CONFIG_PACKAGE_kmod-mt76-core=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76x2=y" >> .config
+          echo "CONFIG_PACKAGE_iperf3=y" >> .config
+          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
+          echo "CONFIG_PACKAGE_htop=y" >> .config
+          echo "CONFIG_PACKAGE_nano=y" >> .config
+
+          # 6. 处理依赖关系
+          echo "CONFIG_PACKAGE_liblucihttp0=y" >> .config
+          echo "CONFIG_PACKAGE_liblucihttp-ucode=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-math=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-html=y" >> .config
+
+          make defconfig
+          echo "✅ 配置文件创建完成，共包含 $(grep -c '=y' .config) 个功能包"
+
+      # ========== 3. 更新 Feeds 并编译 ==========
+      - name: 🔄 更新 Feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: 📥 下载源代码
+        run: |
+          cd openwrt
+          make download -j8
+
+      - name: ⚙️ 开始编译 (约1-2小时)
+        run: |
+          cd openwrt
+          make -j$(nproc) V=s
+
+      # ========== 4. 上传固件 ==========
+      - name: 📦 整理固件
+        run: |
+          cd openwrt
+          mkdir -p firmware
+          find bin/targets/ -name "*-sysupgrade.bin" -exec cp {} firmware/ \;
+          cd firmware
+          md5sum *.bin > md5sums.txt
+          echo "固件列表:"; ls -la
+
+      - name: ⬆️ 上传到 Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: K2-v22.4-16M-中文版-基于成功记录
+          path: openwrt/firmware/
+          retention-days: 30
