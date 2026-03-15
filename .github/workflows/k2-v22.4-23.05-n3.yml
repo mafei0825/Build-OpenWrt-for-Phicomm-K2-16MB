@@ -1,4 +1,4 @@
-name: K2 v22.4 OpenWrt 23.05.5 16M闪存 - 官方内核配置版
+name: K2 v22.4 OpenWrt 23.05.5 16M + chn n3
 
 on:
   workflow_dispatch:
