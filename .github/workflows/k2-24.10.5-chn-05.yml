@@ -244,47 +244,46 @@ jobs:
           echo "固件文件列表:"
           ls -la *.bin
 
-      # ========== 10. 创建README文件 ==========
+      # ========== 10. 创建README文件（使用逐行echo）==========
       - name: 📄 创建README文件
         run: |
           cd openwrt/firmware
           
-          cat > README.txt << 'EOF'
-================================================
-Phicomm K2 v22.4 OpenWrt 24.10.5 Firmware (16MB)
-================================================
-
-【固件信息】
-- 版本: OpenWrt 24.10.5
-- 机型: 斐讯K2 v22.4 (A1/A2) - 必须硬改16M闪存
-- 闪存布局: 公版布局 (firmware分区起始: 0x50000)
-- 界面: 简体中文 (默认)
-
-【已安装的中文语言包】
-- luci-i18n-base-zh-cn
-- luci-i18n-firewall-zh-cn
-- luci-i18n-opkg-zh-cn
-
-【预装软件源配置】
-固件已预置完整的24.10.5官方软件源，可直接运行:
-  opkg update
-
-【刷机步骤】
-1. 进入Breed (按住Reset键上电)
-2. 选择"固件更新"
-3. 选择本固件文件 (*.bin)
-4. ⚠️ 闪存布局必须选"公版"或"0x50000"
-5. 点击上传并确认
-6. 等待自动重启 (约2分钟)
-
-【默认配置】
-- 管理地址: http://192.168.1.1
-- 用户名: root
-- 密码: (空密码)
-
-编译时间: $(date)
-================================================
-EOF
+          # 使用逐行echo创建README文件
+          echo "================================================" > README.txt
+          echo "Phicomm K2 v22.4 OpenWrt 24.10.5 Firmware (16MB)" >> README.txt
+          echo "================================================" >> README.txt
+          echo "" >> README.txt
+          echo "【固件信息】" >> README.txt
+          echo "版本: OpenWrt 24.10.5" >> README.txt
+          echo "机型: 斐讯K2 v22.4 (A1/A2) - 必须硬改16M闪存" >> README.txt
+          echo "闪存布局: 公版布局 (firmware分区起始: 0x50000)" >> README.txt
+          echo "界面: 简体中文 (默认)" >> README.txt
+          echo "" >> README.txt
+          echo "【已安装的中文语言包】" >> README.txt
+          echo "- luci-i18n-base-zh-cn" >> README.txt
+          echo "- luci-i18n-firewall-zh-cn" >> README.txt
+          echo "- luci-i18n-opkg-zh-cn" >> README.txt
+          echo "" >> README.txt
+          echo "【预装软件源配置】" >> README.txt
+          echo "固件已预置完整的24.10.5官方软件源，可直接运行:" >> README.txt
+          echo "  opkg update" >> README.txt
+          echo "" >> README.txt
+          echo "【刷机步骤】" >> README.txt
+          echo "1. 进入Breed (按住Reset键上电)" >> README.txt
+          echo "2. 选择'固件更新'" >> README.txt
+          echo "3. 选择本固件文件 (*.bin)" >> README.txt
+          echo "4. ⚠️ 闪存布局必须选'公版'或'0x50000'" >> README.txt
+          echo "5. 点击上传并确认" >> README.txt
+          echo "6. 等待自动重启 (约2分钟)" >> README.txt
+          echo "" >> README.txt
+          echo "【默认配置】" >> README.txt
+          echo "管理地址: http://192.168.1.1" >> README.txt
+          echo "用户名: root" >> README.txt
+          echo "密码: (空密码)" >> README.txt
+          echo "" >> README.txt
+          echo "编译时间: $(date)" >> README.txt
+          echo "================================================" >> README.txt
           
           echo "✅ README文件创建完成"
 
