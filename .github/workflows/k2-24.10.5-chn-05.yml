@@ -1,4 +1,4 @@
-name: K2 v22.4 OpenWrt 24.10.5 16M  + CHN 22.4-no01
+name: K2 OpenWrt 24.10.5 16M  + CHN 22.4-no01
 
 on:
   workflow_dispatch:
