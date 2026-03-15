@@ -34,9 +34,12 @@ jobs:
           FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
           
           if [ -f "$FILE" ]; then
+            echo "========================================="
             echo "📄 文件: $FILE"
+            echo "========================================="
             echo ""
             echo "【修改前关键内容】"
+            echo "----------------"
             grep -A5 "partition@50000" "$FILE"
             
             # 备份
@@ -47,9 +50,11 @@ jobs:
             
             echo ""
             echo "【修改后关键内容】"
+            echo "----------------"
             grep -A5 "partition@50000" "$FILE"
             echo ""
             echo "📋 修改后完整文件内容:"
+            echo "===================="
             cat "$FILE"
             echo ""
             echo "✅ v22.4 DTS 修改完成"
@@ -65,9 +70,12 @@ jobs:
           MK_FILE="target/linux/ramips/image/mt7620.mk"
           
           if [ -f "$MK_FILE" ]; then
+            echo "========================================="
             echo "📄 文件: $MK_FILE"
+            echo "========================================="
             echo ""
             echo "【修改前相关部分】"
+            echo "----------------"
             grep -A5 "phicomm_k2-v22.4" "$MK_FILE" | grep "IMAGE_SIZE" || echo "  未找到"
             
             # 备份
@@ -78,9 +86,11 @@ jobs:
             
             echo ""
             echo "【修改后相关部分】"
+            echo "----------------"
             grep -A5 "phicomm_k2-v22.4" "$MK_FILE" | grep "IMAGE_SIZE"
             echo ""
             echo "📋 修改后完整 Makefile 内容:"
+            echo "============================"
             cat "$MK_FILE"
             echo ""
             echo "✅ Makefile 修改完成"
@@ -89,7 +99,42 @@ jobs:
             exit 1
           fi
 
-      # ========== 3. 创建配置文件（仅中文UI，无ZT/WG）==========
+      # ========== 3. 验证修改结果 ==========
+      - name: ✅ 验证修改结果
+        run: |
+          cd openwrt
+          echo "========================================="
+          echo "✅ 验证修改结果"
+          echo "========================================="
+          
+          echo "【DTS文件验证】"
+          echo "----------------"
+          DTS_FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
+          if [ -f "$DTS_FILE" ]; then
+            echo "firmware 分区大小:"
+            grep "reg = <0x50000" "$DTS_FILE" | grep -o "0x[0-9a-f]\+" | tail -1
+            if grep -q "0x1fb0000" "$DTS_FILE"; then
+              echo "✅ 正确: 16MB (0x1fb0000)"
+            else
+              echo "❌ 错误: 不是16MB"
+            fi
+          fi
+          
+          echo ""
+          echo "【Makefile验证】"
+          echo "----------------"
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          if [ -f "$MK_FILE" ]; then
+            IMG_SIZE=$(sed -n '/phicomm_k2-v22.4/,/endef/p' "$MK_FILE" | grep "IMAGE_SIZE" | grep -o "[0-9]\+k")
+            echo "IMAGE_SIZE: $IMG_SIZE"
+            if [ "$IMG_SIZE" = "16064k" ]; then
+              echo "✅ 正确: 16MB (16064k)"
+            else
+              echo "❌ 错误: 应该是16064k"
+            fi
+          fi
+
+      # ========== 4. 创建配置文件（仅中文UI）==========
       - name: 📝 创建配置文件
         run: |
           cd openwrt
@@ -99,7 +144,7 @@ jobs:
           echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
           
-          # LuCI 基础组件（确保 Web 界面完整）
+          # LuCI 基础组件
           echo "CONFIG_PACKAGE_luci=y" >> .config
           echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
           echo "CONFIG_PACKAGE_luci-base=y" >> .config
@@ -111,7 +156,7 @@ jobs:
           echo "CONFIG_PACKAGE_firewall=y" >> .config
           echo "CONFIG_PACKAGE_firewall4=y" >> .config
           
-          # 中文语言包（确保界面中文）
+          # 中文语言包
           echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
@@ -134,20 +179,39 @@ jobs:
           make defconfig
           echo "✅ 配置文件创建完成"
 
-      # ========== 4. 更新feeds ==========
+      # ========== 5. 创建软件源配置文件（使用逐行echo避免YAML错误）==========
+      - name: 📄 创建 /etc/opkg/distfeeds.conf
+        run: |
+          cd openwrt
+          
+          mkdir -p files/etc/opkg
+          
+          # 使用逐行echo避免多行字符串语法问题
+          echo "src/gz openwrt_core https://downloads.openwrt.org/releases/24.10.5/targets/ramips/mt7620/packages" > files/etc/opkg/distfeeds.conf
+          echo "src/gz openwrt_base https://downloads.openwrt.org/releases/24.10.5/packages/mipsel_24kc/base" >> files/etc/opkg/distfeeds.conf
+          echo "src/gz openwrt_luci https://downloads.openwrt.org/releases/24.10.5/packages/mipsel_24kc/luci" >> files/etc/opkg/distfeeds.conf
+          echo "src/gz openwrt_packages https://downloads.openwrt.org/releases/24.10.5/packages/mipsel_24kc/packages" >> files/etc/opkg/distfeeds.conf
+          echo "src/gz openwrt_routing https://downloads.openwrt.org/releases/24.10.5/packages/mipsel_24kc/routing" >> files/etc/opkg/distfeeds.conf
+          echo "src/gz openwrt_telephony https://downloads.openwrt.org/releases/24.10.5/packages/mipsel_24kc/telephony" >> files/etc/opkg/distfeeds.conf
+          
+          echo "✅ 软件源配置文件已创建"
+          echo "内容如下:"
+          cat files/etc/opkg/distfeeds.conf
+
+      # ========== 6. 更新feeds ==========
       - name: 🔄 更新feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # ========== 5. 下载源码包 ==========
+      # ========== 7. 下载源码包 ==========
       - name: 📥 下载源码包
         run: |
           cd openwrt
           make download -j8
 
-      # ========== 6. 编译固件 ==========
+      # ========== 8. 编译固件 ==========
       - name: ⚙️ 编译固件
         run: |
           cd openwrt
@@ -160,7 +224,7 @@ jobs:
           
           echo "编译完成时间: $(date)"
 
-      # ========== 7. 整理固件文件 ==========
+      # ========== 9. 整理固件文件 ==========
       - name: 📦 整理固件文件
         run: |
           cd openwrt
@@ -180,69 +244,51 @@ jobs:
           echo "固件文件列表:"
           ls -la *.bin
 
-      # ========== 8. 创建正确的软件源配置文件 ==========
-      - name: 📄 创建正确的 /etc/opkg/distfeeds.conf
-        run: |
-          cd openwrt
-          
-          # 在编译输出目录中创建 files 结构
-          mkdir -p files/etc/opkg
-          
-          cat > files/etc/opkg/distfeeds.conf << 'EOF'
-src/gz openwrt_core https://downloads.openwrt.org/releases/24.10.5/targets/ramips/mt7620/packages
-src/gz openwrt_base https://downloads.openwrt.org/releases/24.10.5/packages/mipsel_24kc/base
-src/gz openwrt_luci https://downloads.openwrt.org/releases/24.10.5/packages/mipsel_24kc/luci
-src/gz openwrt_packages https://downloads.openwrt.org/releases/24.10.5/packages/mipsel_24kc/packages
-src/gz openwrt_routing https://downloads.openwrt.org/releases/24.10.5/packages/mipsel_24kc/routing
-src/gz openwrt_telephony https://downloads.openwrt.org/releases/24.10.5/packages/mipsel_24kc/telephony
-EOF
-          
-          echo "✅ 软件源配置文件已创建"
-          echo "内容如下:"
-          cat files/etc/opkg/distfeeds.conf
-
-      # ========== 9. 创建README文件 ==========
+      # ========== 10. 创建README文件 ==========
       - name: 📄 创建README文件
         run: |
           cd openwrt/firmware
           
-          echo "================================================" > README.txt
-          echo "Phicomm K2 v22.4 OpenWrt 24.10.5 Firmware (16MB)" >> README.txt
-          echo "================================================" >> README.txt
-          echo "" >> README.txt
-          echo "【固件信息】" >> README.txt
-          echo "版本: OpenWrt 24.10.5" >> README.txt
-          echo "机型: 斐讯K2 v22.4 (A1/A2) - 必须硬改16M闪存" >> README.txt
-          echo "闪存布局: 公版布局 (firmware分区起始: 0x50000)" >> README.txt
-          echo "界面: 简体中文 (默认)" >> README.txt
-          echo "" >> README.txt
-          echo "【已安装的中文语言包】" >> README.txt
-          echo "- luci-i18n-base-zh-cn" >> README.txt
-          echo "- luci-i18n-firewall-zh-cn" >> README.txt
-          echo "- luci-i18n-opkg-zh-cn" >> README.txt
-          echo "" >> README.txt
-          echo "【预装软件源配置】" >> README.txt
-          echo "固件已预置完整的24.10.5官方软件源，可直接 opkg update" >> README.txt
-          echo "" >> README.txt
-          echo "【刷机步骤】" >> README.txt
-          echo "1. 进入Breed (按住Reset键上电)" >> README.txt
-          echo "2. 选择'固件更新'" >> README.txt
-          echo "3. 选择本固件文件 (*.bin)" >> README.txt
-          echo "4. ⚠️ 闪存布局必须选'公版'或'0x50000'" >> README.txt
-          echo "5. 点击上传并确认" >> README.txt
-          echo "6. 等待自动重启 (约2分钟)" >> README.txt
-          echo "" >> README.txt
-          echo "【默认配置】" >> README.txt
-          echo "管理地址: http://192.168.1.1" >> README.txt
-          echo "用户名: root" >> README.txt
-          echo "密码: (空密码)" >> README.txt
-          echo "" >> README.txt
-          echo "编译时间: $(date)" >> README.txt
-          echo "================================================" >> README.txt
+          cat > README.txt << 'EOF'
+================================================
+Phicomm K2 v22.4 OpenWrt 24.10.5 Firmware (16MB)
+================================================
+
+【固件信息】
+- 版本: OpenWrt 24.10.5
+- 机型: 斐讯K2 v22.4 (A1/A2) - 必须硬改16M闪存
+- 闪存布局: 公版布局 (firmware分区起始: 0x50000)
+- 界面: 简体中文 (默认)
+
+【已安装的中文语言包】
+- luci-i18n-base-zh-cn
+- luci-i18n-firewall-zh-cn
+- luci-i18n-opkg-zh-cn
+
+【预装软件源配置】
+固件已预置完整的24.10.5官方软件源，可直接运行:
+  opkg update
+
+【刷机步骤】
+1. 进入Breed (按住Reset键上电)
+2. 选择"固件更新"
+3. 选择本固件文件 (*.bin)
+4. ⚠️ 闪存布局必须选"公版"或"0x50000"
+5. 点击上传并确认
+6. 等待自动重启 (约2分钟)
+
+【默认配置】
+- 管理地址: http://192.168.1.1
+- 用户名: root
+- 密码: (空密码)
+
+编译时间: $(date)
+================================================
+EOF
           
           echo "✅ README文件创建完成"
 
-      # ========== 10. 上传固件 ==========
+      # ========== 11. 上传固件 ==========
       - name: ⬆️ 上传固件
         uses: actions/upload-artifact@v4
         with:
