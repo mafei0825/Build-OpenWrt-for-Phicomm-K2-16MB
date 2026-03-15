@@ -72,54 +72,60 @@ jobs:
             echo "❌ 文件不存在: $MK_FILE"; exit 1
           fi
 
-      # ========== 2. 创建配置文件 - 只包含K2 v22.4（终极方案）==========
+      # ========== 2. 创建配置文件 - 使用逐行echo ==========
       - name: 📝 创建配置文件（只包含K2 v22.4）
         run: |
           cd openwrt
           
-          # 完全从零开始，只添加需要的配置
-          cat > .config << 'EOF'
-# 目标平台
-CONFIG_TARGET_ramips=y
-CONFIG_TARGET_ramips_mt7620=y
-CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y
-
-# 16M闪存
-CONFIG_TARGET_ROOTFS_PARTSIZE=16
-
-# 锁定VERMAGIC（从你安装的系统中获取的官方值）
-CONFIG_KERNEL_VERMAGIC="5bc03255e08a37a54dbb31ad01735f42"
-
-# 内核优化 - 与官方一致
-CONFIG_KERNEL_CC_OPTIMIZE_FOR_PERFORMANCE=y
-# CONFIG_KERNEL_CC_OPTIMIZE_FOR_SIZE is not set
-# CONFIG_KERNEL_DEBUG_INFO is not set
-# CONFIG_KERNEL_DEBUG_KERNEL is not set
-
-# LuCI核心组件
-CONFIG_PACKAGE_luci=y
-CONFIG_PACKAGE_luci-base=y
-CONFIG_PACKAGE_luci-mod-admin-full=y
-CONFIG_PACKAGE_luci-theme-bootstrap=y
-CONFIG_PACKAGE_luci-app-firewall=y
-
-# 中文语言包
-CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
-CONFIG_LUCI_LANG_zh_Hans=y
-
-# Web服务器
-CONFIG_PACKAGE_uhttpd=y
-CONFIG_PACKAGE_uhttpd-mod-ubus=y
-
-# 基础工具
-CONFIG_PACKAGE_htop=y
-CONFIG_PACKAGE_nano=y
-
-# 无线驱动
-CONFIG_PACKAGE_kmod-mt76-core=y
-CONFIG_PACKAGE_kmod-mt76x2=y
-EOF
+          # 使用逐行echo创建配置文件
+          echo "# 目标平台" > .config
+          echo "CONFIG_TARGET_ramips=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
+          echo "" >> .config
+          
+          echo "# 16M闪存" >> .config
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+          echo "" >> .config
+          
+          echo "# 锁定VERMAGIC（从你安装的系统中获取的官方值）" >> .config
+          echo "CONFIG_KERNEL_VERMAGIC=\"5bc03255e08a37a54dbb31ad01735f42\"" >> .config
+          echo "" >> .config
+          
+          echo "# 内核优化 - 与官方一致" >> .config
+          echo "CONFIG_KERNEL_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> .config
+          echo "# CONFIG_KERNEL_CC_OPTIMIZE_FOR_SIZE is not set" >> .config
+          echo "# CONFIG_KERNEL_DEBUG_INFO is not set" >> .config
+          echo "# CONFIG_KERNEL_DEBUG_KERNEL is not set" >> .config
+          echo "" >> .config
+          
+          echo "# LuCI核心组件" >> .config
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-base=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
+          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
+          echo "" >> .config
+          
+          echo "# 中文语言包" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
+          echo "" >> .config
+          
+          echo "# Web服务器" >> .config
+          echo "CONFIG_PACKAGE_uhttpd=y" >> .config
+          echo "CONFIG_PACKAGE_uhttpd-mod-ubus=y" >> .config
+          echo "" >> .config
+          
+          echo "# 基础工具" >> .config
+          echo "CONFIG_PACKAGE_htop=y" >> .config
+          echo "CONFIG_PACKAGE_nano=y" >> .config
+          echo "" >> .config
+          
+          echo "# 无线驱动" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76-core=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-mt76x2=y" >> .config
           
           # 运行defconfig补全依赖
           make defconfig
