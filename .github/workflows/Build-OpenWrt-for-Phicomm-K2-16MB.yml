@@ -4,24 +4,24 @@ on:
   workflow_dispatch:
 
 jobs:
-  prepare-source:
+  build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 360
 
     steps:
-      - name: 安装基础依赖
+      - name: 安装编译依赖
         run: |
           sudo apt update
-          sudo apt install -y git wget
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+          gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+          python3-setuptools rsync swig unzip zlib1g-dev file wget
 
-      - name: 检出当前工作流仓库
+      - name: 检出代码
         uses: actions/checkout@v4
 
-      # ========== 关键修复：确保删除旧的 openwrt 目录 ==========
+      # ========== 清理旧的 openwrt 目录 ==========
       - name: 清理旧的 openwrt 目录
-        run: |
-          rm -rf openwrt
-          echo "✅ 已清理旧的 openwrt 目录"
+        run: rm -rf openwrt
 
       - name: 下载 OpenWrt 23.05.5 源码
         run: |
@@ -77,7 +77,7 @@ jobs:
           echo "✅ .config 生成完成"
           grep "phicomm_k2-v22.4" .config || true
 
-      # ========== 4. 打包整个 openwrt 源码目录 ==========
+      # ========== 4. 打包整个 openwrt 源码目录（包含所有修改）==========
       - name: 📦 打包修改后的源码目录
         run: |
           tar -czf openwrt-k2-source.tar.gz -C ${{ github.workspace }} openwrt
@@ -91,13 +91,13 @@ jobs:
 
       - name: 📤 推送源码包到目标仓库
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          # 先确保没有旧的 target-repo 目录
+          # 清理旧的 target-repo 目录
           rm -rf target-repo
           
-          # 克隆目标仓库 (k2-openwrt-builder)
-          git clone https://oauth2:${GITHUB_TOKEN}@github.com/mafei0825/k2-openwrt-builder.git target-repo
+          # 使用 PAT 克隆目标仓库
+          git clone https://oauth2:${GH_PAT}@github.com/mafei0825/k2-openwrt-builder.git target-repo
           cd target-repo
           
           # 创建或清空 source-package 目录
@@ -106,8 +106,6 @@ jobs:
           
           # 将源码包复制到目标仓库目录
           cp ${{ github.workspace }}/openwrt-k2-source.tar.gz source-package/
-          
-          # 可选：也可以复制关键的 .config 文件本身以便查看
           cp ${{ github.workspace }}/openwrt/.config source-package/
           
           # 添加所有更改
@@ -117,4 +115,44 @@ jobs:
           git diff --quiet && git diff --staged --quiet || git commit -m "更新 K2 OpenWrt 源码包 (包含 DTS/Makefile/.config) - $(date +'%Y-%m-%d %H:%M:%S')"
           
           # 推送到 main 分支
-          git push origin main
+          git push https://oauth2:${GH_PAT}@github.com/mafei0825/k2-openwrt-builder.git main
+
+      # ========== 6. 更新 feeds ==========
+      - name: 🔄 更新 feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # ========== 7. 下载源代码包 ==========
+      - name: 📥 下载源代码
+        run: |
+          cd openwrt
+          make download -j8
+
+      # ========== 8. 编译固件 ==========
+      - name: ⚙️ 编译固件
+        run: |
+          cd openwrt
+          echo "开始编译时间: $(date)"
+          make -j$(nproc) V=s
+          echo "编译完成时间: $(date)"
+
+      # ========== 9. 整理固件文件 ==========
+      - name: 📦 整理固件
+        run: |
+          cd openwrt
+          mkdir -p firmware
+          find bin/targets/ -name "*.bin" -exec cp {} firmware/ \;
+          cd firmware
+          md5sum *.bin > md5sums.txt
+          echo "固件列表："
+          ls -la
+
+      # ========== 10. 上传固件到 Actions Artifacts ==========
+      - name: ⬆️ 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: K2-v22.4-16M-23.05.5-基础系统
+          path: openwrt/firmware/
+          retention-days: 30
