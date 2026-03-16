@@ -16,8 +16,12 @@ jobs:
           gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
           python3-setuptools rsync swig unzip zlib1g-dev file wget
 
-      - name: 检出代码（仅用于占位，实际不用）
+      - name: 检出代码（仅用于占位）
         uses: actions/checkout@v4
+
+      # ========== 新增：清理旧的 openwrt 目录 ==========
+      - name: 清理旧的 openwrt 目录
+        run: rm -rf openwrt
 
       - name: 下载 OpenWrt 23.05.5 源码
         run: |
@@ -71,10 +75,9 @@ jobs:
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
           make defconfig
           echo "✅ .config 生成完成"
-          # 打印简要信息
           grep "phicomm_k2-v22.4" .config || true
 
-      # ========== 4. 打包整个 openwrt 源码目录（包含所有修改）==========
+      # ========== 4. 打包整个 openwrt 源码目录 ==========
       - name: 📦 打包修改后的源码目录
         run: |
           tar -czf openwrt-modified.tar.gz -C ${{ github.workspace }} openwrt
