@@ -1,4 +1,4 @@
-name: k2_DTS/Makefile/.config.ipk
+name: k2_DTS_Makefile_config_ipk
 
 on:
   workflow_dispatch:
