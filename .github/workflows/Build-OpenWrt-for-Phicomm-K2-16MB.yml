@@ -6,7 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60  # 不需要编译固件，时间缩短
+    timeout-minutes: 60
 
     steps:
       - name: 安装基础依赖
@@ -89,28 +89,26 @@ jobs:
           # 打包完整的源码目录（可选，如果你需要完整源码）
           tar -czf output/openwrt-full-source.tar.gz -C ${{ github.workspace }} openwrt
           
-          # 创建说明文件
-          cat > output/README.txt << 'EOF'
-================================================
-K2 OpenWrt 源码包说明
-================================================
-
-文件列表：
-- source-package/.config                  # 编译配置文件
-- source-package/mt7620a_phicomm_k2-v22.4.dts  # 修改后的DTS文件（16M闪存）
-- source-package/mt7620.mk                 # 修改后的Makefile（IMAGE_SIZE=16064k）
-- openwrt-full-source.tar.gz               # 完整的OpenWrt源码（包含所有修改）
-
-使用方法：
-1. 解压 openwrt-full-source.tar.gz 得到完整源码
-2. 或者只使用 source-package 中的文件替换到你的OpenWrt源码中
-
-编译说明：
-- 目标平台：K2 v22.4
-- 闪存大小：16MB (已适配)
-- 内核版本：5.15
-================================================
-EOF
+          # ===== 使用逐行echo创建README，避免YAML语法错误 =====
+          echo "================================================" > output/README.txt
+          echo "K2 OpenWrt 源码包说明" >> output/README.txt
+          echo "================================================" >> output/README.txt
+          echo "" >> output/README.txt
+          echo "文件列表：" >> output/README.txt
+          echo "- source-package/.config                  # 编译配置文件" >> output/README.txt
+          echo "- source-package/mt7620a_phicomm_k2-v22.4.dts  # 修改后的DTS文件（16M闪存）" >> output/README.txt
+          echo "- source-package/mt7620.mk                 # 修改后的Makefile（IMAGE_SIZE=16064k）" >> output/README.txt
+          echo "- openwrt-full-source.tar.gz               # 完整的OpenWrt源码（包含所有修改）" >> output/README.txt
+          echo "" >> output/README.txt
+          echo "使用方法：" >> output/README.txt
+          echo "1. 解压 openwrt-full-source.tar.gz 得到完整源码" >> output/README.txt
+          echo "2. 或者只使用 source-package 中的文件替换到你的OpenWrt源码中" >> output/README.txt
+          echo "" >> output/README.txt
+          echo "编译说明：" >> output/README.txt
+          echo "- 目标平台：K2 v22.4" >> output/README.txt
+          echo "- 闪存大小：16MB (已适配)" >> output/README.txt
+          echo "- 内核版本：5.15" >> output/README.txt
+          echo "================================================" >> output/README.txt
           
           echo "✅ 文件整理完成，输出目录内容："
           ls -la output/
