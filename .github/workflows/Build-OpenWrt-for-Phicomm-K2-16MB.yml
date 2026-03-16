@@ -1,4 +1,4 @@
-name:  K2 源码包 (含 DTS/Makefile/.config) 用于后续编译 .ipk
+name: 准备 K2 源码包 (含 DTS/Makefile/.config) 用于后续编译 .ipk
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
 jobs:
   prepare-source:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60 # 这个任务不需要太久
+    timeout-minutes: 60
 
     steps:
       - name: 安装基础依赖
@@ -14,8 +14,14 @@ jobs:
           sudo apt update
           sudo apt install -y git wget
 
-      - name: 检出当前工作流仓库（仅用于获取工作流自身，如需要）
+      - name: 检出当前工作流仓库
         uses: actions/checkout@v4
+
+      # ========== 关键修复：确保删除旧的 openwrt 目录 ==========
+      - name: 清理旧的 openwrt 目录
+        run: |
+          rm -rf openwrt
+          echo "✅ 已清理旧的 openwrt 目录"
 
       - name: 下载 OpenWrt 23.05.5 源码
         run: |
@@ -59,7 +65,7 @@ jobs:
             exit 1
           fi
 
-      # ========== 3. 创建基础 .config（重点：后续编译 .ipk 的基础）==========
+      # ========== 3. 创建基础 .config ==========
       - name: 📝 创建 .config
         run: |
           cd openwrt
@@ -85,9 +91,11 @@ jobs:
 
       - name: 📤 推送源码包到目标仓库
         env:
-          # 使用 GitHub Token 进行认证，GitHub Actions 会自动提供
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # 先确保没有旧的 target-repo 目录
+          rm -rf target-repo
+          
           # 克隆目标仓库 (k2-openwrt-builder)
           git clone https://oauth2:${GITHUB_TOKEN}@github.com/mafei0825/k2-openwrt-builder.git target-repo
           cd target-repo
@@ -105,8 +113,8 @@ jobs:
           # 添加所有更改
           git add source-package/
           
-          # 提交更改
-          git commit -m "更新 K2 OpenWrt 源码包 (包含 DTS/Makefile/.config) - $(date +'%Y-%m-%d %H:%M:%S')"
+          # 提交更改（如果没有变化则跳过）
+          git diff --quiet && git diff --staged --quiet || git commit -m "更新 K2 OpenWrt 源码包 (包含 DTS/Makefile/.config) - $(date +'%Y-%m-%d %H:%M:%S')"
           
           # 推送到 main 分支
           git push origin main
