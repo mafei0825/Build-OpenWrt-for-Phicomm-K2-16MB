@@ -59,19 +59,16 @@ jobs:
             echo "❌ Makefile 不存在"; exit 1
           fi
 
-      # ========== 3. 创建极简配置文件（仅K2 v22.4 + 16M闪存）==========
+      # ========== 3. 创建极简配置文件 ==========
       - name: 📝 创建 .config
         run: |
           cd openwrt
-          # 使用逐行echo确保语法正确
           echo "CONFIG_TARGET_ramips=y" > .config
           echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
           echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
-          # 不添加任何额外软件包，保持最小系统
           make defconfig
-          echo "✅ 配置完成，当前包含设备："
-          grep "CONFIG_TARGET_DEVICE_ramips_mt7620_DEVICE_" .config | grep "=y"
+          echo "✅ 配置完成"
 
       # ========== 4. 更新 feeds ==========
       - name: 🔄 更新 feeds
