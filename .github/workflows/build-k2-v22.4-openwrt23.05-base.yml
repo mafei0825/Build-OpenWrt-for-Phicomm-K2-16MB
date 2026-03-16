@@ -16,12 +16,12 @@ jobs:
           gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
           python3-setuptools rsync swig unzip zlib1g-dev file wget
 
-      - name: 检出代码
+      - name: 检出代码（仅用于占位，实际不用）
         uses: actions/checkout@v4
 
       - name: 下载 OpenWrt 23.05.5 源码
         run: |
-          git clone --depth 1 -b openwrt-23.05 https://github.com/openwrt/openwrt.git
+          git clone --depth 1 -b openwrt-23.05 https://github.com/openwrt/openwrt.git openwrt
           cd openwrt
           git fetch --tags
           git checkout v23.05.5
@@ -34,13 +34,14 @@ jobs:
           FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
           if [ -f "$FILE" ]; then
             echo "修改前 DTS 分区大小："
-            grep "reg = <0x50000" "$FILE"
+            grep "reg = <0x50000" "$FILE" || echo "未找到"
             sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$FILE"
             echo "修改后 DTS 分区大小："
             grep "reg = <0x50000" "$FILE"
             echo "✅ DTS 修改完成"
           else
-            echo "❌ DTS 文件不存在"; exit 1
+            echo "❌ DTS 文件不存在！退出。"
+            exit 1
           fi
 
       # ========== 2. 16M闪存适配：修改 Makefile ==========
@@ -56,49 +57,49 @@ jobs:
             grep -A5 "phicomm_k2-v22.4" "$MK_FILE" | grep "IMAGE_SIZE"
             echo "✅ Makefile 修改完成"
           else
-            echo "❌ Makefile 不存在"; exit 1
+            echo "❌ Makefile 不存在！退出。"
+            exit 1
           fi
 
-      # ========== 3. 创建极简配置文件（仅K2 v22.4 + 16M闪存）==========
-      - name: 📝 创建 .config 并打印配置
+      # ========== 3. 创建基础 .config ==========
+      - name: 📝 创建 .config
         run: |
           cd openwrt
-          # 使用逐行echo确保语法正确
           echo "CONFIG_TARGET_ramips=y" > .config
           echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
           echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
-          # 不添加任何额外软件包，保持最小系统
           make defconfig
-          echo "✅ 配置完成，打印完整 .config："
-          echo "========================================="
-          cat .config
-          echo "========================================="
-          echo "当前设备相关配置："
+          echo "✅ .config 生成完成"
+          # 打印简要信息
           grep "phicomm_k2-v22.4" .config || true
 
-      # ========== 4. 上传 .config 作为 Artifact ==========
-      - name: ⬆️ 上传 .config 文件
+      # ========== 4. 打包整个 openwrt 源码目录（包含所有修改）==========
+      - name: 📦 打包修改后的源码目录
+        run: |
+          tar -czf openwrt-modified.tar.gz -C ${{ github.workspace }} openwrt
+          echo "✅ 源码目录打包完成：openwrt-modified.tar.gz"
+
+      # ========== 5. 上传源码包作为 Artifact ==========
+      - name: ⬆️ 上传修改后的源码包
         uses: actions/upload-artifact@v4
         with:
-          name: K2-v22.4-config
-          path: openwrt/.config
+          name: openwrt-23.05.5-modified-source
+          path: openwrt-modified.tar.gz
           retention-days: 30
 
-      # ========== 5. 更新 feeds ==========
+      # ========== 6. 编译固件 ==========
       - name: 🔄 更新 feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # ========== 6. 下载源代码包 ==========
-      - name: 📥 下载源代码
+      - name: 📥 下载源代码包
         run: |
           cd openwrt
           make download -j8
 
-      # ========== 7. 编译固件 ==========
       - name: ⚙️ 编译固件
         run: |
           cd openwrt
@@ -106,7 +107,7 @@ jobs:
           make -j$(nproc) V=s
           echo "编译完成时间: $(date)"
 
-      # ========== 8. 整理固件文件 ==========
+      # ========== 7. 整理固件文件 ==========
       - name: 📦 整理固件
         run: |
           cd openwrt
@@ -117,7 +118,7 @@ jobs:
           echo "固件列表："
           ls -la
 
-      # ========== 9. 上传固件 ==========
+      # ========== 8. 上传固件 ==========
       - name: ⬆️ 上传固件
         uses: actions/upload-artifact@v4
         with:
