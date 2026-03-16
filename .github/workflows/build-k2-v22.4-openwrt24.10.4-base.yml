@@ -120,27 +120,25 @@ jobs:
           cp ${{ github.workspace }}/openwrt/target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts config-files-24.10/
           cp ${{ github.workspace }}/openwrt/target/linux/ramips/image/mt7620.mk config-files-24.10/
           
-          # 创建 README 说明文件
-          cat > config-files-24.10/README.txt << 'EOF'
-================================================
-K2 OpenWrt 24.10.4 配置文件说明
-================================================
-
-文件列表：
-- .config                            # 编译配置文件
-- mt7620a_phicomm_k2-v22.4.dts        # K2 v22.4 DTS文件（已修改为16M闪存）
-- mt7620.mk                           # Makefile（IMAGE_SIZE已修改为16064k）
-
-配置说明：
-1. DTS 修改：partition@50000 的 reg 已从 0x7b0000 改为 0x1fb0000
-2. Makefile 修改：phicomm_k2-v22.4 的 IMAGE_SIZE 从 7872k 改为 16064k
-3. .config：已选择 phicomm_k2-v22.4 设备，并设置 PARTSIZE=16
-
-使用方法：
-1. 将这些文件复制到 OpenWrt 24.10.4 源码对应目录
-2. 完整固件请从 Actions 下载
-================================================
-EOF
+          # ===== 使用逐行 echo 创建 README 文件 =====
+          echo "================================================" > config-files-24.10/README.txt
+          echo "K2 OpenWrt 24.10.4 配置文件说明" >> config-files-24.10/README.txt
+          echo "================================================" >> config-files-24.10/README.txt
+          echo "" >> config-files-24.10/README.txt
+          echo "文件列表：" >> config-files-24.10/README.txt
+          echo "- .config                            # 编译配置文件" >> config-files-24.10/README.txt
+          echo "- mt7620a_phicomm_k2-v22.4.dts        # K2 v22.4 DTS文件（已修改为16M闪存）" >> config-files-24.10/README.txt
+          echo "- mt7620.mk                           # Makefile（IMAGE_SIZE已修改为16064k）" >> config-files-24.10/README.txt
+          echo "" >> config-files-24.10/README.txt
+          echo "配置说明：" >> config-files-24.10/README.txt
+          echo "1. DTS 修改：partition@50000 的 reg 已从 0x7b0000 改为 0x1fb0000" >> config-files-24.10/README.txt
+          echo "2. Makefile 修改：phicomm_k2-v22.4 的 IMAGE_SIZE 从 7872k 改为 16064k" >> config-files-24.10/README.txt
+          echo "3. .config：已选择 phicomm_k2-v22.4 设备，并设置 PARTSIZE=16" >> config-files-24.10/README.txt
+          echo "" >> config-files-24.10/README.txt
+          echo "使用方法：" >> config-files-24.10/README.txt
+          echo "1. 将这些文件复制到 OpenWrt 24.10.4 源码对应目录" >> config-files-24.10/README.txt
+          echo "2. 完整固件请从 Actions 下载" >> config-files-24.10/README.txt
+          echo "================================================" >> config-files-24.10/README.txt
           
           # 添加所有更改
           git add config-files-24.10/
