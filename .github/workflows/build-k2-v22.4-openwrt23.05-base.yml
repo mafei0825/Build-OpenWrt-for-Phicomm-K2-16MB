@@ -1,4 +1,4 @@
-name: K2 v22.4 OpenWrt 23.05.5 16M闪存 - 基础系统 (含防火墙/VLAN)
+name: K2 v22.4 OpenWrt 23.05.5 16M-base
 
 on:
   workflow_dispatch:
