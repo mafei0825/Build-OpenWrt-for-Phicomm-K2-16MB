@@ -77,19 +77,13 @@ jobs:
           echo "✅ .config 生成完成"
           grep "phicomm_k2-v22.4" .config || true
 
-      # ========== 4. 打包整个 openwrt 源码目录 ==========
-      - name: 📦 打包修改后的源码目录
-        run: |
-          tar -czf openwrt-k2-source.tar.gz -C ${{ github.workspace }} openwrt
-          echo "✅ 源码目录打包完成：openwrt-k2-source.tar.gz"
-
-      # ========== 5. 配置 Git 并推送到目标仓库 ==========
+      # ========== 4. 配置 Git 并推送配置文件到目标仓库 ==========
       - name: ⚙️ 配置 Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: 📤 推送源码包到目标仓库
+      - name: 📤 推送配置文件到目标仓库
         env:
           K2_DTS_MAKEFILE_CONFIG_IPK: ${{ secrets.K2_DTS_MAKEFILE_CONFIG_IPK }}
         run: |
@@ -100,55 +94,53 @@ jobs:
           git clone https://oauth2:${K2_DTS_MAKEFILE_CONFIG_IPK}@github.com/mafei0825/k2-openwrt-builder.git target-repo
           cd target-repo
           
-          # 创建或清空 source-package 目录
-          mkdir -p source-package
-          rm -rf source-package/*
+          # 创建或清空 config-files 目录
+          mkdir -p config-files
+          rm -rf config-files/*
           
-          # 将源码包和关键文件复制到目标仓库目录
-          cp ${{ github.workspace }}/openwrt-k2-source.tar.gz source-package/
-          cp ${{ github.workspace }}/openwrt/.config source-package/
-          cp ${{ github.workspace }}/openwrt/target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts source-package/
-          cp ${{ github.workspace }}/openwrt/target/linux/ramips/image/mt7620.mk source-package/
+          # 推送关键配置文件（不推送大文件）
+          cp ${{ github.workspace }}/openwrt/.config config-files/
+          cp ${{ github.workspace }}/openwrt/target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts config-files/
+          cp ${{ github.workspace }}/openwrt/target/linux/ramips/image/mt7620.mk config-files/
           
           # 创建 README 说明文件
-          echo "================================================" > source-package/README.txt
-          echo "K2 OpenWrt 源码包说明" >> source-package/README.txt
-          echo "================================================" >> source-package/README.txt
-          echo "" >> source-package/README.txt
-          echo "文件列表：" >> source-package/README.txt
-          echo "- openwrt-k2-source.tar.gz  # 完整的OpenWrt源码包" >> source-package/README.txt
-          echo "- .config                  # 编译配置文件" >> source-package/README.txt
-          echo "- mt7620a_phicomm_k2-v22.4.dts  # 修改后的DTS文件（16M闪存）" >> source-package/README.txt
-          echo "- mt7620.mk                 # 修改后的Makefile（IMAGE_SIZE=16064k）" >> source-package/README.txt
-          echo "" >> source-package/README.txt
-          echo "使用方法：" >> source-package/README.txt
-          echo "1. 解压 openwrt-k2-source.tar.gz 得到完整源码" >> source-package/README.txt
-          echo "2. 或直接使用单独的配置文件替换到你的OpenWrt源码中" >> source-package/README.txt
-          echo "================================================" >> source-package/README.txt
+          echo "================================================" > config-files/README.txt
+          echo "K2 OpenWrt 配置文件说明" >> config-files/README.txt
+          echo "================================================" >> config-files/README.txt
+          echo "" >> config-files/README.txt
+          echo "文件列表：" >> config-files/README.txt
+          echo "- .config                  # 编译配置文件" >> config-files/README.txt
+          echo "- mt7620a_phicomm_k2-v22.4.dts  # 修改后的DTS文件（16M闪存）" >> config-files/README.txt
+          echo "- mt7620.mk                 # 修改后的Makefile（IMAGE_SIZE=16064k）" >> config-files/README.txt
+          echo "" >> config-files/README.txt
+          echo "使用方法：" >> config-files/README.txt
+          echo "1. 将这些文件复制到 OpenWrt 源码对应目录" >> config-files/README.txt
+          echo "2. 完整固件请从 Actions 下载" >> config-files/README.txt
+          echo "================================================" >> config-files/README.txt
           
           # 添加所有更改
-          git add source-package/
+          git add config-files/
           
-          # 提交更改（如果没有变化则跳过）
-          git diff --quiet && git diff --staged --quiet || git commit -m "更新 K2 OpenWrt 源码包 (包含 DTS/Makefile/.config) - $(date +'%Y-%m-%d %H:%M:%S')"
+          # 提交更改
+          git diff --quiet && git diff --staged --quiet || git commit -m "更新 K2 OpenWrt 配置文件 - $(date +'%Y-%m-%d %H:%M:%S')"
           
           # 推送到 main 分支
           git push https://oauth2:${K2_DTS_MAKEFILE_CONFIG_IPK}@github.com/mafei0825/k2-openwrt-builder.git main
 
-      # ========== 6. 更新 feeds ==========
+      # ========== 5. 更新 feeds ==========
       - name: 🔄 更新 feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # ========== 7. 下载源代码包 ==========
+      # ========== 6. 下载源代码包 ==========
       - name: 📥 下载源代码
         run: |
           cd openwrt
           make download -j8
 
-      # ========== 8. 编译固件 ==========
+      # ========== 7. 编译固件 ==========
       - name: ⚙️ 编译固件
         run: |
           cd openwrt
@@ -156,7 +148,7 @@ jobs:
           make -j$(nproc) V=s
           echo "编译完成时间: $(date)"
 
-      # ========== 9. 整理固件文件 ==========
+      # ========== 8. 整理固件文件 ==========
       - name: 📦 整理固件
         run: |
           cd openwrt
@@ -167,7 +159,7 @@ jobs:
           echo "固件列表："
           ls -la
 
-      # ========== 10. 上传固件到 Actions Artifacts ==========
+      # ========== 9. 上传固件到 Actions Artifacts ==========
       - name: ⬆️ 上传固件
         uses: actions/upload-artifact@v4
         with:
