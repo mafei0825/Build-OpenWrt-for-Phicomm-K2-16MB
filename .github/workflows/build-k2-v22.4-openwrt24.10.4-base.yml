@@ -1,0 +1,193 @@
+name: K2_DTS_MAKEFILE_CONFIG_IPK_TO_OPENWRT-24.10.4
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: 安装编译依赖
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+          gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+          python3-setuptools rsync swig unzip zlib1g-dev file wget
+
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # ========== 清理旧的 openwrt 目录 ==========
+      - name: 清理旧的 openwrt 目录
+        run: rm -rf openwrt
+
+      - name: 下载 OpenWrt 24.10.4 源码
+        run: |
+          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git openwrt
+          cd openwrt
+          git fetch --tags
+          git checkout v24.10.4
+          echo "✅ OpenWrt 24.10.4 源码下载完成"
+
+      # ========== 1. 16M闪存适配：修改 DTS ==========
+      - name: 🔧 修改 DTS (8MB -> 16MB)
+        run: |
+          cd openwrt
+          
+          # 根据调试结果，K2 v22.4 的 DTS 文件
+          FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
+          
+          if [ -f "$FILE" ]; then
+            echo "找到 DTS 文件: $FILE"
+            echo "修改前 DTS 分区大小："
+            grep -A5 "partition@50000" "$FILE" || echo "未找到"
+            
+            # 备份
+            cp "$FILE" "${FILE}.bak"
+            
+            # 将 0x7b0000 (8MB) 改为 0x1fb0000 (16MB)
+            sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$FILE"
+            
+            echo "修改后 DTS 分区大小："
+            grep -A5 "partition@50000" "$FILE"
+            echo "✅ DTS 修改完成"
+          else
+            echo "❌ DTS 文件不存在！"
+            exit 1
+          fi
+
+      # ========== 2. 16M闪存适配：修改 Makefile ==========
+      - name: 🔧 修改 Makefile (IMAGE_SIZE 8MB -> 16MB)
+        run: |
+          cd openwrt
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          
+          if [ -f "$MK_FILE" ]; then
+            echo "修改前 phicomm_k2-v22.4 IMAGE_SIZE："
+            grep -A5 "phicomm_k2-v22.4" "$MK_FILE" | grep "IMAGE_SIZE"
+            
+            # 备份
+            cp "$MK_FILE" "${MK_FILE}.bak"
+            
+            # 修改 v22.4 的 IMAGE_SIZE 为 16064k
+            sed -i '/phicomm_k2-v22.4/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+            
+            echo "修改后 IMAGE_SIZE："
+            grep -A5 "phicomm_k2-v22.4" "$MK_FILE" | grep "IMAGE_SIZE"
+            echo "✅ Makefile 修改完成"
+          else
+            echo "❌ Makefile 不存在！"
+            exit 1
+          fi
+
+      # ========== 3. 创建基础 .config ==========
+      - name: 📝 创建 .config
+        run: |
+          cd openwrt
+          echo "CONFIG_TARGET_ramips=y" > .config
+          echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+          make defconfig
+          echo "✅ .config 生成完成"
+          grep "phicomm_k2-v22.4" .config || true
+
+      # ========== 4. 配置 Git 并推送配置文件到目标仓库 ==========
+      - name: ⚙️ 配置 Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: 📤 推送配置文件到目标仓库
+        env:
+          K2_DTS_MAKEFILE_CONFIG_IPK: ${{ secrets.K2_DTS_MAKEFILE_CONFIG_IPK }}
+        run: |
+          # 清理旧的 target-repo 目录
+          rm -rf target-repo
+          
+          # 使用 PAT 克隆目标仓库
+          git clone https://oauth2:${K2_DTS_MAKEFILE_CONFIG_IPK}@github.com/mafei0825/k2-openwrt-builder.git target-repo
+          cd target-repo
+          
+          # 创建或清空 config-files-24.10 目录
+          mkdir -p config-files-24.10
+          rm -rf config-files-24.10/*
+          
+          # 推送关键配置文件
+          cp ${{ github.workspace }}/openwrt/.config config-files-24.10/
+          cp ${{ github.workspace }}/openwrt/target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts config-files-24.10/
+          cp ${{ github.workspace }}/openwrt/target/linux/ramips/image/mt7620.mk config-files-24.10/
+          
+          # 创建 README 说明文件
+          cat > config-files-24.10/README.txt << 'EOF'
+================================================
+K2 OpenWrt 24.10.4 配置文件说明
+================================================
+
+文件列表：
+- .config                            # 编译配置文件
+- mt7620a_phicomm_k2-v22.4.dts        # K2 v22.4 DTS文件（已修改为16M闪存）
+- mt7620.mk                           # Makefile（IMAGE_SIZE已修改为16064k）
+
+配置说明：
+1. DTS 修改：partition@50000 的 reg 已从 0x7b0000 改为 0x1fb0000
+2. Makefile 修改：phicomm_k2-v22.4 的 IMAGE_SIZE 从 7872k 改为 16064k
+3. .config：已选择 phicomm_k2-v22.4 设备，并设置 PARTSIZE=16
+
+使用方法：
+1. 将这些文件复制到 OpenWrt 24.10.4 源码对应目录
+2. 完整固件请从 Actions 下载
+================================================
+EOF
+          
+          # 添加所有更改
+          git add config-files-24.10/
+          
+          # 提交更改
+          git diff --quiet && git diff --staged --quiet || git commit -m "更新 K2 OpenWrt 24.10.4 配置文件 - $(date +'%Y-%m-%d %H:%M:%S')"
+          
+          # 推送到 main 分支
+          git push https://oauth2:${K2_DTS_MAKEFILE_CONFIG_IPK}@github.com/mafei0825/k2-openwrt-builder.git main
+
+      # ========== 5. 更新 feeds ==========
+      - name: 🔄 更新 feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # ========== 6. 下载源代码包 ==========
+      - name: 📥 下载源代码
+        run: |
+          cd openwrt
+          make download -j8
+
+      # ========== 7. 编译固件 ==========
+      - name: ⚙️ 编译固件
+        run: |
+          cd openwrt
+          echo "开始编译时间: $(date)"
+          echo "编译 OpenWrt 24.10.4 版本..."
+          make -j$(nproc) V=s
+          echo "编译完成时间: $(date)"
+
+      # ========== 8. 整理固件文件 ==========
+      - name: 📦 整理固件
+        run: |
+          cd openwrt
+          mkdir -p firmware
+          find bin/targets/ -name "*.bin" -exec cp {} firmware/ \;
+          cd firmware
+          md5sum *.bin > md5sums.txt
+          echo "固件列表（OpenWrt 24.10.4）："
+          ls -la
+
+      # ========== 9. 上传固件到 Actions Artifacts ==========
+      - name: ⬆️ 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: K2-v22.4-16M-24.10.4-基础系统
+          path: openwrt/firmware/
+          retention-days: 30
