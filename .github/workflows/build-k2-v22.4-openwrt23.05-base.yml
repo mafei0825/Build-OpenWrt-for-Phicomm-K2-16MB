@@ -59,31 +59,46 @@ jobs:
             echo "❌ Makefile 不存在"; exit 1
           fi
 
-      # ========== 3. 创建极简配置文件 ==========
-      - name: 📝 创建 .config
+      # ========== 3. 创建极简配置文件（仅K2 v22.4 + 16M闪存）==========
+      - name: 📝 创建 .config 并打印配置
         run: |
           cd openwrt
+          # 使用逐行echo确保语法正确
           echo "CONFIG_TARGET_ramips=y" > .config
           echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
           echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+          # 不添加任何额外软件包，保持最小系统
           make defconfig
-          echo "✅ 配置完成"
+          echo "✅ 配置完成，打印完整 .config："
+          echo "========================================="
+          cat .config
+          echo "========================================="
+          echo "当前设备相关配置："
+          grep "phicomm_k2-v22.4" .config || true
 
-      # ========== 4. 更新 feeds ==========
+      # ========== 4. 上传 .config 作为 Artifact ==========
+      - name: ⬆️ 上传 .config 文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: K2-v22.4-config
+          path: openwrt/.config
+          retention-days: 30
+
+      # ========== 5. 更新 feeds ==========
       - name: 🔄 更新 feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # ========== 5. 下载源代码包 ==========
+      # ========== 6. 下载源代码包 ==========
       - name: 📥 下载源代码
         run: |
           cd openwrt
           make download -j8
 
-      # ========== 6. 编译固件 ==========
+      # ========== 7. 编译固件 ==========
       - name: ⚙️ 编译固件
         run: |
           cd openwrt
@@ -91,7 +106,7 @@ jobs:
           make -j$(nproc) V=s
           echo "编译完成时间: $(date)"
 
-      # ========== 7. 整理固件文件 ==========
+      # ========== 8. 整理固件文件 ==========
       - name: 📦 整理固件
         run: |
           cd openwrt
@@ -102,7 +117,7 @@ jobs:
           echo "固件列表："
           ls -la
 
-      # ========== 8. 上传固件 ==========
+      # ========== 9. 上传固件 ==========
       - name: ⬆️ 上传固件
         uses: actions/upload-artifact@v4
         with:
