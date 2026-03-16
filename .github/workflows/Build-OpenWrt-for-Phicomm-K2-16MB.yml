@@ -1,4 +1,4 @@
-name: 准备 K2 源码包 (含 DTS/Makefile/.config) 用于后续编译 .ipk
+name: k2_DTS/Makefile/.config.ipk
 
 on:
   workflow_dispatch:
