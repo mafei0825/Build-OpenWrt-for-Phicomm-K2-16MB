@@ -1,0 +1,236 @@
+name: Debug Config Generation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug-config:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential git
+
+      - name: Checkout (placeholder)
+        uses: actions/checkout@v4
+
+      - name: Clean old openwrt
+        run: rm -rf openwrt
+
+      - name: Download OpenWrt 24.10.4 source
+        run: |
+          git clone --depth 1 -b openwrt-24.10 https://github.com/openwrt/openwrt.git openwrt
+          cd openwrt
+          git fetch --tags
+          git checkout v24.10.4
+
+      - name: Apply 16MB flash patches (DTS & Makefile)
+        run: |
+          cd openwrt
+          # DTS
+          FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
+          if [ -f "$FILE" ]; then
+            sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$FILE"
+          else
+            echo "DTS file not found"
+            exit 1
+          fi
+          # Makefile
+          MK_FILE="target/linux/ramips/image/mt7620.mk"
+          if [ -f "$MK_FILE" ]; then
+            sed -i '/phicomm_k2-v22.4/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
+          else
+            echo "Makefile not found"
+            exit 1
+          fi
+
+      - name: Update feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Generate full .config
+        run: |
+          cd openwrt
+          # 基础平台
+          echo "CONFIG_TARGET_ramips=y" > .config
+          echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
+          echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
+          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+          echo "CONFIG_TARGET_ARCH_PACKAGES=\"mipsel_24kc\"" >> .config
+
+          # Feeds
+          echo "CONFIG_FEED_luci=y" >> .config
+          echo "CONFIG_FEED_packages=y" >> .config
+          echo "CONFIG_FEED_routing=y" >> .config
+          echo "CONFIG_FEED_telephony=y" >> .config
+
+          # 基础库
+          echo "CONFIG_PACKAGE_libc=y" >> .config
+          echo "CONFIG_PACKAGE_libgcc=y" >> .config
+          echo "CONFIG_PACKAGE_libpthread=y" >> .config
+          echo "CONFIG_PACKAGE_librt=y" >> .config
+          echo "CONFIG_PACKAGE_libubox=y" >> .config
+          echo "CONFIG_PACKAGE_libuci=y" >> .config
+          echo "CONFIG_PACKAGE_libubus=y" >> .config
+          echo "CONFIG_PACKAGE_libblobmsg-json=y" >> .config
+          echo "CONFIG_PACKAGE_libjson-c=y" >> .config
+          echo "CONFIG_PACKAGE_libmnl=y" >> .config
+          echo "CONFIG_PACKAGE_libnftnl=y" >> .config
+          echo "CONFIG_PACKAGE_libnl-tiny=y" >> .config
+          echo "CONFIG_PACKAGE_libuclient=y" >> .config
+          echo "CONFIG_PACKAGE_libucode=y" >> .config
+          echo "CONFIG_PACKAGE_jansson=y" >> .config
+          echo "CONFIG_PACKAGE_libcurl=y" >> .config
+          echo "CONFIG_PACKAGE_curl=y" >> .config
+          echo "CONFIG_PACKAGE_libopenssl=y" >> .config
+          echo "CONFIG_PACKAGE_libmbedtls=y" >> .config
+          echo "CONFIG_PACKAGE_zlib=y" >> .config
+          echo "CONFIG_PACKAGE_libzstd=y" >> .config
+
+          # Lua & ucode
+          echo "CONFIG_PACKAGE_lua=y" >> .config
+          echo "CONFIG_PACKAGE_lua5.3=y" >> .config
+          echo "CONFIG_PACKAGE_libiwinfo-lua=y" >> .config
+          echo "CONFIG_PACKAGE_ucode=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-fs=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-html=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-math=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-nl80211=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-rtnl=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-ubus=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-uci=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-uloop=y" >> .config
+
+          # LuCI base libs
+          echo "CONFIG_PACKAGE_liblucihttp0=y" >> .config
+          echo "CONFIG_PACKAGE_liblucihttp-ucode=y" >> .config
+          echo "CONFIG_PACKAGE_luajit=y" >> .config
+
+          # Web & services
+          echo "CONFIG_PACKAGE_uhttpd=y" >> .config
+          echo "CONFIG_PACKAGE_uhttpd-mod-ubus=y" >> .config
+          echo "CONFIG_PACKAGE_uhttpd-mod-lua=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-file=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-iwinfo=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-luci=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-ucode=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-rrdns=y" >> .config
+          echo "CONFIG_PACKAGE_cgi-io=y" >> .config
+
+          # LuCI core
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-base=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
+          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
+          echo "CONFIG_PACKAGE_luci-lib-ipkg=y" >> .config
+          echo "CONFIG_PACKAGE_luci-lib-json=y" >> .config
+          echo "CONFIG_PACKAGE_luci-compat=y" >> .config
+
+          # LuCI modules
+          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-ipv6=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-ppp=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-status=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-system=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-network=y" >> .config
+
+          # Firewall
+          echo "CONFIG_PACKAGE_firewall4=y" >> .config
+          echo "CONFIG_PACKAGE_nftables=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nft-core=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nft-fib=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nft-nat=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nft-offload=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-conntrack=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-conntrack6=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-flow=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-nat=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nfnetlink=y" >> .config
+
+          # Chinese language
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
+          echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
+
+          # WireGuard
+          echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y" >> .config
+
+          # ZeroTier
+          echo "CONFIG_PACKAGE_zerotier=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_libnatpmp=y" >> .config
+          echo "CONFIG_PACKAGE_libminiupnpc=y" >> .config
+
+          # Attended sysupgrade
+          echo "CONFIG_PACKAGE_owut=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-attendedsysupgrade=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-attendedsysupgrade-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_libustream-mbedtls=y" >> .config
+
+          # Utilities
+          echo "CONFIG_PACKAGE_htop=y" >> .config
+          echo "CONFIG_PACKAGE_nano=y" >> .config
+          echo "CONFIG_PACKAGE_iperf3=y" >> .config
+          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
+          echo "CONFIG_PACKAGE_wget=y" >> .config
+          echo "CONFIG_PACKAGE_tar=y" >> .config
+          echo "CONFIG_PACKAGE_unzip=y" >> .config
+          echo "CONFIG_PACKAGE_coreutils=y" >> .config
+
+          # Run defconfig
+          make defconfig
+
+      - name: Verify key packages
+        run: |
+          cd openwrt
+          echo "===== Key packages status ====="
+          packages=(
+            "kmod-wireguard"
+            "wireguard-tools"
+            "luci-proto-wireguard"
+            "zerotier"
+            "luci-app-zerotier"
+            "owut"
+            "luci-app-attendedsysupgrade"
+            "luci"
+            "luci-base"
+            "luci-i18n-base-zh-cn"
+            "luci-compat"
+            "uhttpd"
+            "uhttpd-mod-lua"
+            "luci-proto-ipv6"
+            "luci-app-firewall"
+          )
+          missing=()
+          for pkg in "${packages[@]}"; do
+            if grep -q "CONFIG_PACKAGE_${pkg}=y" .config; then
+              echo "✅ ${pkg} selected"
+            else
+              echo "❌ ${pkg} NOT selected"
+              missing+=("${pkg}")
+            fi
+          done
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "🎉 All required packages selected!"
+          else
+            echo "⚠️ Missing packages: ${missing[*]}"
+          fi
+
+      - name: Upload .config as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-config
+          path: openwrt/.config
+          retention-days: 7
