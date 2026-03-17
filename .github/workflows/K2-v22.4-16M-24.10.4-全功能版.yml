@@ -69,59 +69,209 @@ jobs:
             exit 1
           fi
 
-      # ========== 3. 创建包含所有功能的 .config ==========
-      - name: 📝 创建 .config
+      # ========== 3. 创建包含所有功能及其依赖项的 .config（按顺序）==========
+      - name: 📝 创建 .config（按依赖顺序）
         run: |
           cd openwrt
 
-          # 基础平台
+          # ----- 第1层：基础平台 -----
           echo "CONFIG_TARGET_ramips=y" > .config
           echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
           echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
+          echo "CONFIG_TARGET_ARCH_PACKAGES=\"mipsel_24kc\"" >> .config
 
-          # 启用 luci feed（重要！）
+          # ----- 第2层：必须启用的 feeds -----
           echo "CONFIG_FEED_luci=y" >> .config
+          echo "CONFIG_FEED_packages=y" >> .config
+          echo "CONFIG_FEED_routing=y" >> .config
+          echo "CONFIG_FEED_telephony=y" >> .config
 
-          # LuCI 核心组件
+          # ========== 第3层：基础库和工具 ==========
+          echo "# 基础库" >> .config
+          echo "CONFIG_PACKAGE_libc=y" >> .config
+          echo "CONFIG_PACKAGE_libgcc=y" >> .config
+          echo "CONFIG_PACKAGE_libpthread=y" >> .config
+          echo "CONFIG_PACKAGE_librt=y" >> .config
+          echo "CONFIG_PACKAGE_libubox=y" >> .config
+          echo "CONFIG_PACKAGE_libuci=y" >> .config
+          echo "CONFIG_PACKAGE_libubus=y" >> .config
+          echo "CONFIG_PACKAGE_libblobmsg-json=y" >> .config
+          echo "CONFIG_PACKAGE_libjson-c=y" >> .config
+          echo "CONFIG_PACKAGE_libmnl=y" >> .config
+          echo "CONFIG_PACKAGE_libnftnl=y" >> .config
+          echo "CONFIG_PACKAGE_libnl-tiny=y" >> .config
+          echo "CONFIG_PACKAGE_libuclient=y" >> .config
+          echo "CONFIG_PACKAGE_libucode=y" >> .config
+          echo "CONFIG_PACKAGE_jansson=y" >> .config
+          echo "CONFIG_PACKAGE_libcurl=y" >> .config
+          echo "CONFIG_PACKAGE_curl=y" >> .config
+          echo "CONFIG_PACKAGE_libopenssl=y" >> .config
+          echo "CONFIG_PACKAGE_libmbedtls=y" >> .config
+          echo "CONFIG_PACKAGE_zlib=y" >> .config
+          echo "CONFIG_PACKAGE_libzstd=y" >> .config
+
+          # ========== 第4层：Lua 和 ucode 运行时 ==========
+          echo "# Lua 和 ucode 运行时" >> .config
+          echo "CONFIG_PACKAGE_lua=y" >> .config
+          echo "CONFIG_PACKAGE_lua5.3=y" >> .config
+          echo "CONFIG_PACKAGE_luac=y" >> .config
+          echo "CONFIG_PACKAGE_luac5.3=y" >> .config
+          echo "CONFIG_PACKAGE_libiwinfo-lua=y" >> .config
+          
+          echo "CONFIG_PACKAGE_ucode=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-debug=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-fs=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-html=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-math=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-nl80211=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-resolv=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-rtnl=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-struct=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-ubus=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-uci=y" >> .config
+          echo "CONFIG_PACKAGE_ucode-mod-uloop=y" >> .config
+
+          # ========== 第5层：LuCI 基础库 ==========
+          echo "# LuCI 基础库" >> .config
+          echo "CONFIG_PACKAGE_liblucihttp0=y" >> .config
+          echo "CONFIG_PACKAGE_liblucihttp-ucode=y" >> .config
+          echo "CONFIG_PACKAGE_luajit=y" >> .config
+
+          # ========== 第6层：Web 服务器及核心服务 ==========
+          echo "# Web 服务器" >> .config
+          echo "CONFIG_PACKAGE_uhttpd=y" >> .config
+          echo "CONFIG_PACKAGE_uhttpd-mod-ubus=y" >> .config
+          echo "CONFIG_PACKAGE_uhttpd-mod-lua=y" >> .config
+          
+          echo "# RPC 服务" >> .config
+          echo "CONFIG_PACKAGE_rpcd=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-file=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-iwinfo=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-luci=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-ucode=y" >> .config
+          echo "CONFIG_PACKAGE_rpcd-mod-rrdns=y" >> .config
+          echo "CONFIG_PACKAGE_cgi-io=y" >> .config
+
+          # ========== 第7层：LuCI 核心组件 ==========
+          echo "# LuCI 核心" >> .config
           echo "CONFIG_PACKAGE_luci=y" >> .config
           echo "CONFIG_PACKAGE_luci-base=y" >> .config
           echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
           echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
-          echo "CONFIG_PACKAGE_uhttpd-mod-lua=y" >> .config
+          echo "CONFIG_PACKAGE_luci-lib-ipkg=y" >> .config
+          echo "CONFIG_PACKAGE_luci-lib-json=y" >> .config
+          echo "CONFIG_PACKAGE_luci-compat=y" >> .config
 
-          # 中文语言包
+          # ========== 第8层：LuCI 应用模块 ==========
+          echo "# LuCI 应用模块" >> .config
+          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-ipv6=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-ppp=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-status=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-system=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-network=y" >> .config
+
+          # ========== 第9层：防火墙 ==========
+          echo "# 防火墙" >> .config
+          echo "CONFIG_PACKAGE_firewall4=y" >> .config
+          echo "CONFIG_PACKAGE_nftables=y" >> .config
+          echo "CONFIG_PACKAGE_nftables-json=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nft-core=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nft-fib=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nft-nat=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nft-offload=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-conntrack=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-conntrack6=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-flow=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nf-nat=y" >> .config
+          echo "CONFIG_PACKAGE_kmod-nfnetlink=y" >> .config
+
+          # ========== 第10层：中文语言包 ==========
+          echo "# 中文语言包" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
           echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
 
-          # WireGuard
+          # ========== 第11层：WireGuard ==========
+          echo "# WireGuard" >> .config
           echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
           echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y" >> .config
 
-          # ZeroTier
+          # ========== 第12层：ZeroTier ==========
+          echo "# ZeroTier" >> .config
           echo "CONFIG_PACKAGE_zerotier=y" >> .config
           echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_libnatpmp=y" >> .config
+          echo "CONFIG_PACKAGE_libminiupnpc=y" >> .config
 
-          # 防火墙界面
-          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
-          echo "CONFIG_PACKAGE_firewall4=y" >> .config
+          # ========== 第13层：auc 和 attendedsysupgrade ==========
+          echo "# 自动升级" >> .config
+          echo "CONFIG_PACKAGE_auc=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-attendedsysupgrade=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-attendedsysupgrade-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_libustream-mbedtls=y" >> .config
+          echo "CONFIG_PACKAGE_libustream-openssl=y" >> .config
 
-          # ===== 新增：auc 和 attendedsysupgrade =====
-          echo "CONFIG_PACKAGE_auc=y" >> .config                     # 自动升级核心工具
-          echo "CONFIG_PACKAGE_luci-app-attendedsysupgrade=y" >> .config  # 自动升级 Web 界面
-          echo "CONFIG_PACKAGE_luci-i18n-attendedsysupgrade-zh-cn=y" >> .config  # 中文包
-          # auc 依赖 libcurl，通常会被自动选中，为保险可手动添加：
-          echo "CONFIG_PACKAGE_libcurl=y" >> .config
-          echo "CONFIG_PACKAGE_curl=y" >> .config
+          # ========== 第14层：实用工具 ==========
+          echo "# 实用工具" >> .config
+          echo "CONFIG_PACKAGE_htop=y" >> .config
+          echo "CONFIG_PACKAGE_nano=y" >> .config
+          echo "CONFIG_PACKAGE_iperf3=y" >> .config
+          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
+          echo "CONFIG_PACKAGE_wget=y" >> .config
+          echo "CONFIG_PACKAGE_tar=y" >> .config
+          echo "CONFIG_PACKAGE_unzip=y" >> .config
+          echo "CONFIG_PACKAGE_coreutils=y" >> .config
+
+          # 运行 defconfig 补全依赖
+          echo "===== 执行 make defconfig 前 ====="
+          grep -E "CONFIG_PACKAGE_uhttpd|CONFIG_PACKAGE_luci|CONFIG_FEED_luci" .config || echo "❌ 关键配置缺失！"
 
           make defconfig
-          echo "✅ .config 生成完成"
-          grep -E "phicomm_k2|luci|wireguard|zerotier|uhttpd|auc|attended" .config || true
+
+          # ========== 验证所有关键配置 ==========
+          echo "===== 执行 make defconfig 后 ====="
+          echo "✅ .config 生成完成，关键配置验证："
+          echo ""
+          echo "【Web 服务器】"
+          grep "CONFIG_PACKAGE_uhttpd" .config || echo "❌ uhttpd 未选中！"
+          grep "CONFIG_PACKAGE_uhttpd-mod-lua" .config || echo "❌ uhttpd-mod-lua 未选中！"
+          
+          echo ""
+          echo "【LuCI 核心】"
+          grep "CONFIG_PACKAGE_luci" .config || echo "❌ luci 未选中！"
+          grep "CONFIG_PACKAGE_luci-base" .config || echo "❌ luci-base 未选中！"
+          grep "CONFIG_PACKAGE_luci-compat" .config || echo "❌ luci-compat 未选中！"
+          
+          echo ""
+          echo "【中文支持】"
+          grep "CONFIG_PACKAGE_luci-i18n-base-zh-cn" .config || echo "❌ 中文包未选中！"
+          grep "CONFIG_LUCI_LANG_zh_Hans" .config || echo "❌ 默认语言未设置！"
+          
+          echo ""
+          echo "【WireGuard】"
+          grep "CONFIG_PACKAGE_kmod-wireguard" .config || echo "❌ kmod-wireguard 未选中！"
+          grep "CONFIG_PACKAGE_luci-app-wireguard" .config || echo "❌ luci-app-wireguard 未选中！"
+          
+          echo ""
+          echo "【ZeroTier】"
+          grep "CONFIG_PACKAGE_zerotier" .config || echo "❌ zerotier 未选中！"
+          grep "CONFIG_PACKAGE_luci-app-zerotier" .config || echo "❌ luci-app-zerotier 未选中！"
+          
+          echo ""
+          echo "【Attended Sysupgrade】"
+          grep "CONFIG_PACKAGE_auc" .config || echo "❌ auc 未选中！"
+          grep "CONFIG_PACKAGE_luci-app-attendedsysupgrade" .config || echo "❌ luci-app-attendedsysupgrade 未选中！"
+          
+          echo ""
+          echo "【设备选择】"
+          grep "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2" .config || echo "❌ 设备未选中！"
 
       # ========== 4. 推送配置文件到目标仓库 ==========
       - name: ⚙️ 配置 Git
