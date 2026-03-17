@@ -1,4 +1,4 @@
-name: K2_DTS_MAKEFILE_CONFIG_IPK_TO_OPENWRT-24.10.4-n4
+name: K2_DTS_MAKEFILE_CONFIG_IPK_TO_OPENWRT-24.10.4-n5
 
 on:
   workflow_dispatch:
@@ -62,18 +62,32 @@ jobs:
             exit 1
           fi
 
-      # ========== 更新 feeds（添加 kenzo 源）==========
+      # ========== 更新 feeds（添加第三方源）==========
       - name: 🔄 更新 feeds
         run: |
           cd openwrt
           # 添加 kenzo 第三方源（常用插件源）
           echo 'src-git kenzo https://github.com/kenzok8/openwrt-packages' >> feeds.conf.default
           echo 'src-git small https://github.com/kenzok8/small' >> feeds.conf.default
+          # 可选添加 helloworld 源，确保包含更多包
+          echo 'src-git helloworld https://github.com/fw876/helloworld.git' >> feeds.conf.default
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           echo "✅ feeds 更新完成"
 
-      # ========== 创建 .config（全功能版，逐行echo避免YAML错误）==========
+      # ========== 检查 feeds 中是否存在缺失的包 ==========
+      - name: 🔍 检查 feeds 列表
+        run: |
+          cd openwrt
+          echo "=== 检查 luci-app-wireguard ==="
+          ./scripts/feeds list | grep luci-app-wireguard || echo "❌ 未找到 luci-app-wireguard"
+          echo "=== 检查 luci-app-zerotier ==="
+          ./scripts/feeds list | grep luci-app-zerotier || echo "❌ 未找到 luci-app-zerotier"
+          echo "=== 检查 auc ==="
+          ./scripts/feeds list | grep auc || echo "❌ 未找到 auc"
+          # 如果缺少，可以尝试添加其他源（但此处仅检查，不自动添加）
+
+      # ========== 创建 .config（全功能版，逐行echo）==========
       - name: 📝 创建 .config
         run: |
           cd openwrt
@@ -193,6 +207,7 @@ jobs:
           # ---------- WireGuard ----------
           echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
           echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
+          # 显式强制选中缺失包
           echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y" >> .config
 
