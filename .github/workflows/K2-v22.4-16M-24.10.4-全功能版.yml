@@ -1,4 +1,4 @@
-name: K2_DTS_MAKEFILE_CONFIG_IPK_TO_OPENWRT-24.10.4-n1
+name: K2_DTS_MAKEFILE_CONFIG_IPK_TO_OPENWRT-24.10.4-n2
 
 on:
   workflow_dispatch:
@@ -36,20 +36,13 @@ jobs:
         run: |
           cd openwrt
           
-          # 根据调试结果，K2 v22.4 的 DTS 文件
           FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
-          
           if [ -f "$FILE" ]; then
             echo "找到 DTS 文件: $FILE"
             echo "修改前 DTS 分区大小："
             grep -A5 "partition@50000" "$FILE" || echo "未找到"
-            
-            # 备份
             cp "$FILE" "${FILE}.bak"
-            
-            # 将 0x7b0000 (8MB) 改为 0x1fb0000 (16MB)
             sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$FILE"
-            
             echo "修改后 DTS 分区大小："
             grep -A5 "partition@50000" "$FILE"
             echo "✅ DTS 修改完成"
@@ -63,17 +56,11 @@ jobs:
         run: |
           cd openwrt
           MK_FILE="target/linux/ramips/image/mt7620.mk"
-          
           if [ -f "$MK_FILE" ]; then
             echo "修改前 phicomm_k2-v22.4 IMAGE_SIZE："
             grep -A5 "phicomm_k2-v22.4" "$MK_FILE" | grep "IMAGE_SIZE"
-            
-            # 备份
             cp "$MK_FILE" "${MK_FILE}.bak"
-            
-            # 修改 v22.4 的 IMAGE_SIZE 为 16064k
             sed -i '/phicomm_k2-v22.4/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
-            
             echo "修改后 IMAGE_SIZE："
             grep -A5 "phicomm_k2-v22.4" "$MK_FILE" | grep "IMAGE_SIZE"
             echo "✅ Makefile 修改完成"
@@ -82,27 +69,27 @@ jobs:
             exit 1
           fi
 
-      # ========== 3. 创建包含 LuCI、中文、WireGuard、ZeroTier 的 .config ==========
+      # ========== 3. 创建包含所有功能的 .config ==========
       - name: 📝 创建 .config
         run: |
           cd openwrt
-          
+
           # 基础平台
           echo "CONFIG_TARGET_ramips=y" > .config
           echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
           echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
           echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
 
+          # 启用 luci feed（重要！）
+          echo "CONFIG_FEED_luci=y" >> .config
+
           # LuCI 核心组件
           echo "CONFIG_PACKAGE_luci=y" >> .config
           echo "CONFIG_PACKAGE_luci-base=y" >> .config
           echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
           echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
-          
-          # Web 服务器（LuCI 依赖）
-          echo "CONFIG_PACKAGE_uhttpd=y" >> .config
-          echo "CONFIG_PACKAGE_uhttpd-mod-ubus=y" >> .config
-          
+          echo "CONFIG_PACKAGE_uhttpd-mod-lua=y" >> .config
+
           # 中文语言包
           echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
@@ -120,16 +107,23 @@ jobs:
           echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y" >> .config
 
-          # 基础防火墙（通常已包含，但明确选择）
-          echo "CONFIG_PACKAGE_firewall4=y" >> .config
+          # 防火墙界面
           echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
+          echo "CONFIG_PACKAGE_firewall4=y" >> .config
 
-          # 更新配置
+          # ===== 新增：auc 和 attendedsysupgrade =====
+          echo "CONFIG_PACKAGE_auc=y" >> .config                     # 自动升级核心工具
+          echo "CONFIG_PACKAGE_luci-app-attendedsysupgrade=y" >> .config  # 自动升级 Web 界面
+          echo "CONFIG_PACKAGE_luci-i18n-attendedsysupgrade-zh-cn=y" >> .config  # 中文包
+          # auc 依赖 libcurl，通常会被自动选中，为保险可手动添加：
+          echo "CONFIG_PACKAGE_libcurl=y" >> .config
+          echo "CONFIG_PACKAGE_curl=y" >> .config
+
           make defconfig
           echo "✅ .config 生成完成"
-          grep -E "phicomm_k2|luci|wireguard|zerotier|uhttpd" .config || true
+          grep -E "phicomm_k2|luci|wireguard|zerotier|uhttpd|auc|attended" .config || true
 
-      # ========== 4. 配置 Git 并推送配置文件到目标仓库 ==========
+      # ========== 4. 推送配置文件到目标仓库 ==========
       - name: ⚙️ 配置 Git
         run: |
           git config --global user.name "github-actions[bot]"
@@ -139,29 +133,22 @@ jobs:
         env:
           K2_DTS_MAKEFILE_CONFIG_IPK: ${{ secrets.K2_DTS_MAKEFILE_CONFIG_IPK }}
         run: |
-          # 清理旧的 target-repo 目录
           rm -rf target-repo
-          
-          # 使用 PAT 克隆目标仓库
           git clone https://oauth2:${K2_DTS_MAKEFILE_CONFIG_IPK}@github.com/mafei0825/k2-openwrt-builder.git target-repo
           cd target-repo
-          
-          # 创建或清空 config-files-24.10 目录
           mkdir -p config-files-24.10
           rm -rf config-files-24.10/*
-          
-          # 推送关键配置文件
           cp ${{ github.workspace }}/openwrt/.config config-files-24.10/
           cp ${{ github.workspace }}/openwrt/target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts config-files-24.10/
           cp ${{ github.workspace }}/openwrt/target/linux/ramips/image/mt7620.mk config-files-24.10/
-          
-          # ===== 使用逐行 echo 创建 README 文件 =====
+
+          # 创建 README
           echo "================================================" > config-files-24.10/README.txt
-          echo "K2 OpenWrt 24.10.4 配置文件说明（含 LuCI、中文、WireGuard、ZeroTier）" >> config-files-24.10/README.txt
+          echo "K2 OpenWrt 24.10.4 配置文件说明（全功能版 + Attended Sysupgrade）" >> config-files-24.10/README.txt
           echo "================================================" >> config-files-24.10/README.txt
           echo "" >> config-files-24.10/README.txt
           echo "文件列表：" >> config-files-24.10/README.txt
-          echo "- .config                            # 编译配置文件（包含所有功能）" >> config-files-24.10/README.txt
+          echo "- .config                            # 编译配置文件" >> config-files-24.10/README.txt
           echo "- mt7620a_phicomm_k2-v22.4.dts        # K2 v22.4 DTS文件（已修改为16M闪存）" >> config-files-24.10/README.txt
           echo "- mt7620.mk                           # Makefile（IMAGE_SIZE已修改为16064k）" >> config-files-24.10/README.txt
           echo "" >> config-files-24.10/README.txt
@@ -173,27 +160,22 @@ jobs:
           echo "   - 简体中文语言包" >> config-files-24.10/README.txt
           echo "   - WireGuard（内核模块 + LuCI 界面）" >> config-files-24.10/README.txt
           echo "   - ZeroTier（客户端 + LuCI 界面）" >> config-files-24.10/README.txt
+          echo "   - auc + Attended Sysupgrade（自动升级）" >> config-files-24.10/README.txt
           echo "   - uhttpd Web 服务器" >> config-files-24.10/README.txt
           echo "" >> config-files-24.10/README.txt
           echo "使用方法：" >> config-files-24.10/README.txt
           echo "1. 将这些文件复制到 OpenWrt 24.10.4 源码对应目录" >> config-files-24.10/README.txt
           echo "2. 完整固件请从 Actions 下载" >> config-files-24.10/README.txt
           echo "================================================" >> config-files-24.10/README.txt
-          
-          # 添加所有更改
+
           git add config-files-24.10/
-          
-          # 提交更改
-          git diff --quiet && git diff --staged --quiet || git commit -m "更新 K2 OpenWrt 24.10.4 配置文件（含LuCI+WireGuard+ZeroTier） - $(date +'%Y-%m-%d %H:%M:%S')"
-          
-          # 推送到 main 分支
+          git diff --quiet && git diff --staged --quiet || git commit -m "更新 K2 OpenWrt 24.10.4 配置文件（全功能+attended） - $(date +'%Y-%m-%d %H:%M:%S')"
           git push https://oauth2:${K2_DTS_MAKEFILE_CONFIG_IPK}@github.com/mafei0825/k2-openwrt-builder.git main
 
       # ========== 5. 更新 feeds ==========
       - name: 🔄 更新 feeds
         run: |
           cd openwrt
-          # 如需第三方源可添加（例如 kenzo 源包含更多包，但官方源已包含所需，此处不添加）
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
@@ -208,7 +190,7 @@ jobs:
         run: |
           cd openwrt
           echo "开始编译时间: $(date)"
-          echo "编译 OpenWrt 24.10.4 版本（含 LuCI、中文、WireGuard、ZeroTier）..."
+          echo "编译 OpenWrt 24.10.4 版本（含 LuCI、中文、WireGuard、ZeroTier、Attended Sysupgrade）..."
           make -j$(nproc) V=s
           echo "编译完成时间: $(date)"
 
@@ -220,13 +202,13 @@ jobs:
           find bin/targets/ -name "*.bin" -exec cp {} firmware/ \;
           cd firmware
           md5sum *.bin > md5sums.txt
-          echo "固件列表（OpenWrt 24.10.4 全功能版）："
+          echo "固件列表（OpenWrt 24.10.4 全功能版 + Attended）："
           ls -la
 
       # ========== 9. 上传固件到 Actions Artifacts ==========
       - name: ⬆️ 上传固件
         uses: actions/upload-artifact@v4
         with:
-          name: K2-v22.4-16M-24.10.4-全功能版
+          name: K2-v22.4-16M-24.10.4-全功能版+Attended
           path: openwrt/firmware/
           retention-days: 30
