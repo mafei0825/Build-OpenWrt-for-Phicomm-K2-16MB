@@ -1,4 +1,4 @@
-name: K2 v22.4 OpenWrt 24.10.4 push n9
+name: K2 v22.4 OpenWrt 24.10.4 push n10
 
 on:
   workflow_dispatch:
@@ -61,7 +61,14 @@ jobs:
             exit 1
           fi
 
-      # ========== 写入完整 .config（基于调试成功的配置）==========
+      # ========== 更新 feeds（必须在写入 config 之前）==========
+      - name: 🔄 更新 feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      # ========== 写入完整 .config ==========
       - name: 📝 写入完整 .config
         run: |
           cd openwrt
@@ -78,7 +85,7 @@ jobs:
           echo "CONFIG_FEED_routing=y" >> .config
           echo "CONFIG_FEED_telephony=y" >> .config
 
-          # 基础库（包括 libstdcpp 等）
+          # 基础库
           echo "CONFIG_PACKAGE_libc=y" >> .config
           echo "CONFIG_PACKAGE_libgcc=y" >> .config
           echo "CONFIG_PACKAGE_libpthread=y" >> .config
@@ -101,7 +108,7 @@ jobs:
           echo "CONFIG_PACKAGE_libmbedtls=y" >> .config
           echo "CONFIG_PACKAGE_zlib=y" >> .config
 
-          # Lua & ucode (LuCI 需要)
+          # Lua & ucode
           echo "CONFIG_PACKAGE_lua=y" >> .config
           echo "CONFIG_PACKAGE_lua5.3=y" >> .config
           echo "CONFIG_PACKAGE_libiwinfo-lua=y" >> .config
@@ -155,7 +162,7 @@ jobs:
           echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
           echo "CONFIG_PACKAGE_luci-proto-wireguard=y" >> .config
 
-          # ZeroTier core (without LuCI app)
+          # ZeroTier core
           echo "CONFIG_PACKAGE_zerotier=y" >> .config
           echo "CONFIG_PACKAGE_kmod-tun=y" >> .config
           echo "CONFIG_PACKAGE_libnatpmp=y" >> .config
@@ -186,17 +193,13 @@ jobs:
             fi
           done
 
-      - name: 🔄 更新 feeds
-        run: |
-          cd openwrt
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
+      # ========== 下载源代码包 ==========
       - name: 📥 下载源代码包
         run: |
           cd openwrt
           make download -j8
 
+      # ========== 编译固件 ==========
       - name: ⚙️ 编译固件
         run: |
           cd openwrt
