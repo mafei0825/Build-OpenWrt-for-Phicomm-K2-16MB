@@ -1,10 +1,10 @@
-name: Debug Config Generation
+name: Debug ZeroTier Dependencies
 
 on:
   workflow_dispatch:
 
 jobs:
-  debug-config:
+  debug-zerotier:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
@@ -30,7 +30,6 @@ jobs:
       - name: Apply 16MB flash patches (DTS & Makefile)
         run: |
           cd openwrt
-          # DTS
           FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
           if [ -f "$FILE" ]; then
             sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$FILE"
@@ -38,7 +37,6 @@ jobs:
             echo "DTS file not found"
             exit 1
           fi
-          # Makefile
           MK_FILE="target/linux/ramips/image/mt7620.mk"
           if [ -f "$MK_FILE" ]; then
             sed -i '/phicomm_k2-v22.4/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
@@ -53,7 +51,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Generate full .config
+      - name: Generate .config with additional jsonc lib
         run: |
           cd openwrt
           # 基础平台
@@ -69,7 +67,7 @@ jobs:
           echo "CONFIG_FEED_routing=y" >> .config
           echo "CONFIG_FEED_telephony=y" >> .config
 
-          # 基础库
+          # 基础库（同上）
           echo "CONFIG_PACKAGE_libc=y" >> .config
           echo "CONFIG_PACKAGE_libgcc=y" >> .config
           echo "CONFIG_PACKAGE_libpthread=y" >> .config
@@ -106,10 +104,11 @@ jobs:
           echo "CONFIG_PACKAGE_ucode-mod-uci=y" >> .config
           echo "CONFIG_PACKAGE_ucode-mod-uloop=y" >> .config
 
-          # LuCI base libs
+          # LuCI base libs (增加 jsonc 库)
           echo "CONFIG_PACKAGE_liblucihttp0=y" >> .config
           echo "CONFIG_PACKAGE_liblucihttp-ucode=y" >> .config
           echo "CONFIG_PACKAGE_luajit=y" >> .config
+          echo "CONFIG_PACKAGE_luci-lib-jsonc=y" >> .config
 
           # Web & services
           echo "CONFIG_PACKAGE_uhttpd=y" >> .config
@@ -231,6 +230,6 @@ jobs:
       - name: Upload .config as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: debug-config
+          name: debug-config-with-jsonc
           path: openwrt/.config
           retention-days: 7
