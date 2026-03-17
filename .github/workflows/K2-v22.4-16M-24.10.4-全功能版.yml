@@ -1,4 +1,4 @@
-name: K2 v22.4 OpenWrt 24.10.4 - n7
+name: K2 v22.4 OpenWrt 24.10.4 n7
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
           gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
           python3-setuptools rsync swig unzip zlib1g-dev file wget
 
-      - name: 检出代码（占位）
+      - name: 检出当前仓库（占位）
         uses: actions/checkout@v4
 
       - name: 清理旧的 openwrt 目录
@@ -30,14 +30,14 @@ jobs:
           git checkout v24.10.4
           echo "✅ OpenWrt 24.10.4 源码下载完成"
 
-      # 从你的配置仓库获取完整的 .config
+      # 从你的配置仓库获取配置文件
       - name: 检出配置文件仓库
         uses: actions/checkout@v4
         with:
           repository: 'mafei0825/k2-openwrt-builder'
           path: 'config-repo'
 
-      # 应用 16M 闪存适配（DTS 和 Makefile 修改）
+      # ========== 16M闪存适配 ==========
       - name: 🔧 修改 DTS (8MB -> 16MB)
         run: |
           cd openwrt
@@ -68,7 +68,7 @@ jobs:
             exit 1
           fi
 
-      # 使用从配置仓库获取的 .config
+      # ========== 加载 .config ==========
       - name: 📝 加载 .config
         run: |
           cd openwrt
@@ -76,17 +76,61 @@ jobs:
           make defconfig
           echo "✅ .config 加载完成"
 
+      # ========== 验证关键功能包 ==========
+      - name: ✅ 验证关键功能包
+        run: |
+          cd openwrt
+          echo "===== 关键功能包状态 ====="
+          
+          packages=(
+            "kmod-wireguard"
+            "wireguard-tools"
+            "luci-proto-wireguard"
+            "zerotier"
+            "luci-app-zerotier"
+            "owut"
+            "luci-app-attendedsysupgrade"
+            "luci"
+            "luci-base"
+            "luci-i18n-base-zh-cn"
+            "luci-compat"
+            "uhttpd"
+            "uhttpd-mod-lua"
+            "luci-proto-ipv6"
+            "luci-app-firewall"
+          )
+          
+          for pkg in "${packages[@]}"; do
+            if grep -q "CONFIG_PACKAGE_${pkg}=y" .config; then
+              echo "✅ ${pkg} 已选中"
+            else
+              echo "❌ ${pkg} 未选中"
+            fi
+          done
+          
+          echo ""
+          echo "===== 设备选择 ====="
+          grep "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2" .config || echo "❌ 设备未正确选择"
+          
+          echo ""
+          echo "===== feeds 启用状态 ====="
+          grep "CONFIG_FEED_luci=y" .config && echo "✅ luci feed 已启用" || echo "❌ luci feed 未启用"
+          grep "CONFIG_FEED_packages=y" .config && echo "✅ packages feed 已启用" || echo "❌ packages feed 未启用"
+
+      # ========== 更新 feeds ==========
       - name: 🔄 更新 feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      # ========== 下载源代码包 ==========
       - name: 📥 下载源代码包
         run: |
           cd openwrt
           make download -j8
 
+      # ========== 编译固件 ==========
       - name: ⚙️ 编译固件
         run: |
           cd openwrt
@@ -94,7 +138,7 @@ jobs:
           make -j$(nproc) V=s
           echo "编译完成时间: $(date)"
 
-      # 推送更新后的配置到目标仓库
+      # ========== 推送更新后的配置到目标仓库 ==========
       - name: ⚙️ 配置 Git
         run: |
           git config --global user.name "github-actions[bot]"
@@ -115,7 +159,8 @@ jobs:
           git diff --quiet && git diff --staged --quiet || git commit -m "更新 K2 OpenWrt 24.10.4 配置文件 - $(date +'%Y-%m-%d %H:%M:%S')"
           git push https://oauth2:${K2_DTS_MAKEFILE_CONFIG_IPK}@github.com/mafei0825/k2-openwrt-builder.git main
 
-      - name: 📦 整理固件文件
+      # ========== 整理固件文件 ==========
+      - name: 📦 整理固件
         run: |
           cd openwrt
           mkdir -p firmware
@@ -125,6 +170,7 @@ jobs:
           echo "固件列表："
           ls -la
 
+      # ========== 上传固件 ==========
       - name: ⬆️ 上传固件
         uses: actions/upload-artifact@v4
         with:
