@@ -1,4 +1,4 @@
-name: K2 v22.4 OpenWrt 23.05.5 push - n2
+name: K2 v22.4 OpenWrt 23.05.5 push - n3
 
 on:
   workflow_dispatch:
@@ -61,7 +61,7 @@ jobs:
             exit 1
           fi
 
-      # ========== 更新 feeds（必须在写入 config 之前）==========
+      # ========== 更新 feeds ==========
       - name: 🔄 更新 feeds
         run: |
           cd openwrt
@@ -103,6 +103,10 @@ jobs:
           echo "CONFIG_PACKAGE_libmbedtls=y" >> .config
           echo "CONFIG_PACKAGE_zlib=y" >> .config
 
+          # ===== NAT穿透库（ZeroTier依赖）=====
+          echo "CONFIG_PACKAGE_libnatpmp=y" >> .config
+          echo "CONFIG_PACKAGE_libminiupnpc=y" >> .config
+
           # ===== Lua & ucode =====
           echo "CONFIG_PACKAGE_lua=y" >> .config
           echo "CONFIG_PACKAGE_lua5.3=y" >> .config
@@ -142,24 +146,21 @@ jobs:
           echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
           echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
 
-          # ===== WireGuard =====
+          # ===== WireGuard（包含 LuCI 协议支持）=====
           echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
           echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
+          echo "CONFIG_PACKAGE_luci-proto-wireguard=y" >> .config
 
-          # ===== ZeroTier =====
+          # ===== ZeroTier（核心服务 + NAT穿透库，无 LuCI 界面）=====
           echo "CONFIG_PACKAGE_zerotier=y" >> .config
           echo "CONFIG_PACKAGE_kmod-tun=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
-
-          # ===== 自动升级 =====
-          echo "CONFIG_PACKAGE_auc=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-attendedsysupgrade=y" >> .config
+          # 不选 luci-app-zerotier
 
           # ===== 实用工具 =====
           echo "CONFIG_PACKAGE_htop=y" >> .config
           echo "CONFIG_PACKAGE_nano=y" >> .config
           echo "CONFIG_PACKAGE_tcpdump=y" >> .config
+          echo "CONFIG_PACKAGE_iperf3=y" >> .config
 
           # 运行 defconfig
           make defconfig
@@ -171,9 +172,8 @@ jobs:
           echo "===== 关键包状态 ====="
           packages=(
             "luci" "luci-base" "luci-mod-admin-full" "luci-app-firewall"
-            "kmod-wireguard" "wireguard-tools" "luci-app-wireguard"
-            "zerotier" "kmod-tun" "luci-app-zerotier"
-            "auc" "luci-app-attendedsysupgrade"
+            "kmod-wireguard" "wireguard-tools" "luci-proto-wireguard"
+            "zerotier" "kmod-tun" "libnatpmp" "libminiupnpc"
             "luci-i18n-base-zh-cn"
           )
           for pkg in "${packages[@]}"; do
@@ -231,6 +231,6 @@ jobs:
       - name: ⬆️ 上传固件
         uses: actions/upload-artifact@v4
         with:
-          name: K2-v22.4-16M-23.05.5-全功能固件
+          name: K2-v22.4-16M-23.05.5-全功能固件-v4
           path: openwrt/firmware/
           retention-days: 30
