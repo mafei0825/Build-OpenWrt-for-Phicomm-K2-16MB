@@ -1,4 +1,4 @@
-name: K2_DTS_MAKEFILE_CONFIG_IPK_TO_OPENWRT-24.10.4-n5
+name: K2 v22.4 OpenWrt 24.10.4 - n7
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
           gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
           python3-setuptools rsync swig unzip zlib1g-dev file wget
 
-      - name: 检出代码
+      - name: 检出代码（占位）
         uses: actions/checkout@v4
 
       - name: 清理旧的 openwrt 目录
@@ -30,249 +30,71 @@ jobs:
           git checkout v24.10.4
           echo "✅ OpenWrt 24.10.4 源码下载完成"
 
-      # ========== 16M闪存适配：修改 DTS ==========
+      # 从你的配置仓库获取完整的 .config
+      - name: 检出配置文件仓库
+        uses: actions/checkout@v4
+        with:
+          repository: 'mafei0825/k2-openwrt-builder'
+          path: 'config-repo'
+
+      # 应用 16M 闪存适配（DTS 和 Makefile 修改）
       - name: 🔧 修改 DTS (8MB -> 16MB)
         run: |
           cd openwrt
           FILE="target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts"
           if [ -f "$FILE" ]; then
-            echo "修改前："
+            echo "修改前 DTS 分区大小："
             grep -A5 "partition@50000" "$FILE"
             sed -i 's/reg = <0x50000 0x7b0000>/reg = <0x50000 0x1fb0000>/' "$FILE"
-            echo "修改后："
+            echo "修改后 DTS 分区大小："
             grep -A5 "partition@50000" "$FILE"
           else
             echo "❌ DTS 文件不存在！"
             exit 1
           fi
 
-      # ========== 16M闪存适配：修改 Makefile ==========
       - name: 🔧 修改 Makefile (IMAGE_SIZE 8MB -> 16MB)
         run: |
           cd openwrt
           MK_FILE="target/linux/ramips/image/mt7620.mk"
           if [ -f "$MK_FILE" ]; then
-            echo "修改前："
+            echo "修改前 IMAGE_SIZE："
             grep -A5 "phicomm_k2-v22.4" "$MK_FILE" | grep "IMAGE_SIZE"
             sed -i '/phicomm_k2-v22.4/,/endef/ s/IMAGE_SIZE := .*/IMAGE_SIZE := 16064k/' "$MK_FILE"
-            echo "修改后："
+            echo "修改后 IMAGE_SIZE："
             grep -A5 "phicomm_k2-v22.4" "$MK_FILE" | grep "IMAGE_SIZE"
           else
             echo "❌ Makefile 不存在！"
             exit 1
           fi
 
-      # ========== 更新 feeds（添加第三方源）==========
+      # 使用从配置仓库获取的 .config
+      - name: 📝 加载 .config
+        run: |
+          cd openwrt
+          cp ${{ github.workspace }}/config-repo/config-files-24.10/.config .config
+          make defconfig
+          echo "✅ .config 加载完成"
+
       - name: 🔄 更新 feeds
         run: |
           cd openwrt
-          # 添加 kenzo 第三方源（常用插件源）
-          echo 'src-git kenzo https://github.com/kenzok8/openwrt-packages' >> feeds.conf.default
-          echo 'src-git small https://github.com/kenzok8/small' >> feeds.conf.default
-          # 可选添加 helloworld 源，确保包含更多包
-          echo 'src-git helloworld https://github.com/fw876/helloworld.git' >> feeds.conf.default
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          echo "✅ feeds 更新完成"
 
-      # ========== 检查 feeds 中是否存在缺失的包 ==========
-      - name: 🔍 检查 feeds 列表
+      - name: 📥 下载源代码包
         run: |
           cd openwrt
-          echo "=== 检查 luci-app-wireguard ==="
-          ./scripts/feeds list | grep luci-app-wireguard || echo "❌ 未找到 luci-app-wireguard"
-          echo "=== 检查 luci-app-zerotier ==="
-          ./scripts/feeds list | grep luci-app-zerotier || echo "❌ 未找到 luci-app-zerotier"
-          echo "=== 检查 auc ==="
-          ./scripts/feeds list | grep auc || echo "❌ 未找到 auc"
-          # 如果缺少，可以尝试添加其他源（但此处仅检查，不自动添加）
+          make download -j8
 
-      # ========== 创建 .config（全功能版，逐行echo）==========
-      - name: 📝 创建 .config
+      - name: ⚙️ 编译固件
         run: |
           cd openwrt
+          echo "开始编译时间: $(date)"
+          make -j$(nproc) V=s
+          echo "编译完成时间: $(date)"
 
-          # ----- 基础平台 -----
-          echo "CONFIG_TARGET_ramips=y" > .config
-          echo "CONFIG_TARGET_ramips_mt7620=y" >> .config
-          echo "CONFIG_TARGET_ramips_mt7620_DEVICE_phicomm_k2-v22.4=y" >> .config
-          echo "CONFIG_TARGET_ROOTFS_PARTSIZE=16" >> .config
-          echo "CONFIG_TARGET_ARCH_PACKAGES=\"mipsel_24kc\"" >> .config
-
-          # 必须启用的 feeds
-          echo "CONFIG_FEED_luci=y" >> .config
-          echo "CONFIG_FEED_packages=y" >> .config
-          echo "CONFIG_FEED_routing=y" >> .config
-          echo "CONFIG_FEED_telephony=y" >> .config
-
-          # ---------- 基础库 ----------
-          echo "CONFIG_PACKAGE_libc=y" >> .config
-          echo "CONFIG_PACKAGE_libgcc=y" >> .config
-          echo "CONFIG_PACKAGE_libpthread=y" >> .config
-          echo "CONFIG_PACKAGE_librt=y" >> .config
-          echo "CONFIG_PACKAGE_libubox=y" >> .config
-          echo "CONFIG_PACKAGE_libuci=y" >> .config
-          echo "CONFIG_PACKAGE_libubus=y" >> .config
-          echo "CONFIG_PACKAGE_libblobmsg-json=y" >> .config
-          echo "CONFIG_PACKAGE_libjson-c=y" >> .config
-          echo "CONFIG_PACKAGE_libmnl=y" >> .config
-          echo "CONFIG_PACKAGE_libnftnl=y" >> .config
-          echo "CONFIG_PACKAGE_libnl-tiny=y" >> .config
-          echo "CONFIG_PACKAGE_libuclient=y" >> .config
-          echo "CONFIG_PACKAGE_libucode=y" >> .config
-          echo "CONFIG_PACKAGE_jansson=y" >> .config
-          echo "CONFIG_PACKAGE_libcurl=y" >> .config
-          echo "CONFIG_PACKAGE_curl=y" >> .config
-          echo "CONFIG_PACKAGE_libopenssl=y" >> .config
-          echo "CONFIG_PACKAGE_libmbedtls=y" >> .config
-          echo "CONFIG_PACKAGE_zlib=y" >> .config
-          echo "CONFIG_PACKAGE_libzstd=y" >> .config
-
-          # ---------- Lua 和 ucode 运行时 ----------
-          echo "CONFIG_PACKAGE_lua=y" >> .config
-          echo "CONFIG_PACKAGE_lua5.3=y" >> .config
-          echo "CONFIG_PACKAGE_luac=y" >> .config
-          echo "CONFIG_PACKAGE_luac5.3=y" >> .config
-          echo "CONFIG_PACKAGE_libiwinfo-lua=y" >> .config
-
-          echo "CONFIG_PACKAGE_ucode=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-debug=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-fs=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-html=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-math=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-nl80211=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-resolv=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-rtnl=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-struct=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-ubus=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-uci=y" >> .config
-          echo "CONFIG_PACKAGE_ucode-mod-uloop=y" >> .config
-
-          # ---------- LuCI 基础库 ----------
-          echo "CONFIG_PACKAGE_liblucihttp0=y" >> .config
-          echo "CONFIG_PACKAGE_liblucihttp-ucode=y" >> .config
-          echo "CONFIG_PACKAGE_luajit=y" >> .config
-
-          # ---------- Web 服务器及核心服务 ----------
-          echo "CONFIG_PACKAGE_uhttpd=y" >> .config
-          echo "CONFIG_PACKAGE_uhttpd-mod-ubus=y" >> .config
-          echo "CONFIG_PACKAGE_uhttpd-mod-lua=y" >> .config
-
-          echo "CONFIG_PACKAGE_rpcd=y" >> .config
-          echo "CONFIG_PACKAGE_rpcd-mod-file=y" >> .config
-          echo "CONFIG_PACKAGE_rpcd-mod-iwinfo=y" >> .config
-          echo "CONFIG_PACKAGE_rpcd-mod-luci=y" >> .config
-          echo "CONFIG_PACKAGE_rpcd-mod-ucode=y" >> .config
-          echo "CONFIG_PACKAGE_rpcd-mod-rrdns=y" >> .config
-          echo "CONFIG_PACKAGE_cgi-io=y" >> .config
-
-          # ---------- LuCI 核心 ----------
-          echo "CONFIG_PACKAGE_luci=y" >> .config
-          echo "CONFIG_PACKAGE_luci-base=y" >> .config
-          echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
-          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
-          echo "CONFIG_PACKAGE_luci-lib-ipkg=y" >> .config
-          echo "CONFIG_PACKAGE_luci-lib-json=y" >> .config
-          echo "CONFIG_PACKAGE_luci-compat=y" >> .config
-
-          # ---------- LuCI 应用模块 ----------
-          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
-          echo "CONFIG_PACKAGE_luci-proto-ipv6=y" >> .config
-          echo "CONFIG_PACKAGE_luci-proto-ppp=y" >> .config
-          echo "CONFIG_PACKAGE_luci-mod-status=y" >> .config
-          echo "CONFIG_PACKAGE_luci-mod-system=y" >> .config
-          echo "CONFIG_PACKAGE_luci-mod-network=y" >> .config
-
-          # ---------- 防火墙 ----------
-          echo "CONFIG_PACKAGE_firewall4=y" >> .config
-          echo "CONFIG_PACKAGE_nftables=y" >> .config
-          echo "CONFIG_PACKAGE_nftables-json=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nft-core=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nft-fib=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nft-nat=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nft-offload=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nf-conntrack=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nf-conntrack6=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nf-flow=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nf-nat=y" >> .config
-          echo "CONFIG_PACKAGE_kmod-nfnetlink=y" >> .config
-
-          # ---------- 中文语言包 ----------
-          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
-          echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
-
-          # ---------- WireGuard ----------
-          echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
-          echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
-          # 显式强制选中缺失包
-          echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y" >> .config
-
-          # ---------- ZeroTier ----------
-          echo "CONFIG_PACKAGE_zerotier=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-zerotier=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-zerotier-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_libnatpmp=y" >> .config
-          echo "CONFIG_PACKAGE_libminiupnpc=y" >> .config
-
-          # ---------- 自动升级 ----------
-          echo "CONFIG_PACKAGE_auc=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-attendedsysupgrade=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-attendedsysupgrade-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_libustream-mbedtls=y" >> .config
-          echo "CONFIG_PACKAGE_libustream-openssl=y" >> .config
-
-          # ---------- 实用工具 ----------
-          echo "CONFIG_PACKAGE_htop=y" >> .config
-          echo "CONFIG_PACKAGE_nano=y" >> .config
-          echo "CONFIG_PACKAGE_iperf3=y" >> .config
-          echo "CONFIG_PACKAGE_tcpdump=y" >> .config
-          echo "CONFIG_PACKAGE_wget=y" >> .config
-          echo "CONFIG_PACKAGE_tar=y" >> .config
-          echo "CONFIG_PACKAGE_unzip=y" >> .config
-          echo "CONFIG_PACKAGE_coreutils=y" >> .config
-
-          # 运行 defconfig 补全依赖
-          make defconfig
-
-          # ========== 详细验证 ==========
-          echo "===== 执行 make defconfig 后 ====="
-          echo "✅ .config 生成完成，正在检查关键包..."
-          echo ""
-
-          # 定义需要检查的包列表
-          packages=(
-            "luci"
-            "luci-base"
-            "luci-compat"
-            "luci-app-wireguard"
-            "luci-app-zerotier"
-            "auc"
-          )
-
-          missing=()
-          for pkg in "${packages[@]}"; do
-            if grep -q "CONFIG_PACKAGE_${pkg}=y" .config; then
-              echo "✅ ${pkg} 已选中"
-            else
-              echo "❌ ${pkg} 未选中"
-              missing+=("${pkg}")
-            fi
-          done
-
-          if [ ${#missing[@]} -eq 0 ]; then
-            echo "🎉 所有关键包均已选中！"
-          else
-            echo ""
-            echo "⚠️ 以下包未选中："
-            printf '%s\n' "${missing[@]}"
-            echo "请检查 feeds 是否包含这些包，或尝试手动添加第三方源。"
-          fi
-
-      # ========== 推送配置文件到目标仓库 ==========
+      # 推送更新后的配置到目标仓库
       - name: ⚙️ 配置 Git
         run: |
           git config --global user.name "github-actions[bot]"
@@ -286,59 +108,26 @@ jobs:
           git clone https://oauth2:${K2_DTS_MAKEFILE_CONFIG_IPK}@github.com/mafei0825/k2-openwrt-builder.git target-repo
           cd target-repo
           mkdir -p config-files-24.10
-          rm -rf config-files-24.10/*
           cp ${{ github.workspace }}/openwrt/.config config-files-24.10/
           cp ${{ github.workspace }}/openwrt/target/linux/ramips/dts/mt7620a_phicomm_k2-v22.4.dts config-files-24.10/
           cp ${{ github.workspace }}/openwrt/target/linux/ramips/image/mt7620.mk config-files-24.10/
-
-          # 创建 README
-          echo "================================================" > config-files-24.10/README.txt
-          echo "K2 OpenWrt 24.10.4 配置文件说明（全功能版）" >> config-files-24.10/README.txt
-          echo "================================================" >> config-files-24.10/README.txt
-          echo "" >> config-files-24.10/README.txt
-          echo "文件列表：" >> config-files-24.10/README.txt
-          echo "- .config                            # 编译配置文件" >> config-files-24.10/README.txt
-          echo "- mt7620a_phicomm_k2-v22.4.dts        # K2 v22.4 DTS文件（16M闪存）" >> config-files-24.10/README.txt
-          echo "- mt7620.mk                           # Makefile（IMAGE_SIZE=16064k）" >> config-files-24.10/README.txt
-          echo "" >> config-files-24.10/README.txt
-          echo "配置说明：" >> config-files-24.10/README.txt
-          echo "- DTS 修改：partition@50000 的 reg 已从 0x7b0000 改为 0x1fb0000" >> config-files-24.10/README.txt
-          echo "- Makefile 修改：phicomm_k2-v22.4 的 IMAGE_SIZE 改为 16064k" >> config-files-24.10/README.txt
-          echo "- 包含 LuCI 完整界面、中文包、WireGuard、ZeroTier、自动升级等" >> config-files-24.10/README.txt
-          echo "================================================" >> config-files-24.10/README.txt
-
           git add config-files-24.10/
           git diff --quiet && git diff --staged --quiet || git commit -m "更新 K2 OpenWrt 24.10.4 配置文件 - $(date +'%Y-%m-%d %H:%M:%S')"
           git push https://oauth2:${K2_DTS_MAKEFILE_CONFIG_IPK}@github.com/mafei0825/k2-openwrt-builder.git main
 
-      # ========== 下载源代码 ==========
-      - name: 📥 下载源代码
-        run: |
-          cd openwrt
-          make download -j8
-
-      # ========== 编译固件 ==========
-      - name: ⚙️ 编译固件
-        run: |
-          cd openwrt
-          echo "开始编译时间: $(date)"
-          make -j$(nproc) V=s
-          echo "编译完成时间: $(date)"
-
-      # ========== 整理固件 ==========
-      - name: 📦 整理固件
+      - name: 📦 整理固件文件
         run: |
           cd openwrt
           mkdir -p firmware
           find bin/targets/ -name "*.bin" -exec cp {} firmware/ \;
           cd firmware
           md5sum *.bin > md5sums.txt
+          echo "固件列表："
           ls -la
 
-      # ========== 上传固件 ==========
       - name: ⬆️ 上传固件
         uses: actions/upload-artifact@v4
         with:
-          name: K2-v22.4-16M-24.10.4-全功能版
+          name: K2-v22.4-16M-24.10.4-全功能固件
           path: openwrt/firmware/
           retention-days: 30
